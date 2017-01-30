@@ -74,7 +74,7 @@ public class Condition2 {
 	private Lock conditionLock;
 
 	private LinkedList<KThread> waitForCondQueue;
-//	we should not use system queue
+//	we should not use system queue, it will be get by nextReadQueue() in spite of waiting on conditional variables
 //	private ThreadQueue waitQueue = ThreadedKernel.scheduler
 //			.newThreadQueue(false);
 }
