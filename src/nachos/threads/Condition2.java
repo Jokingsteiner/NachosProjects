@@ -3,6 +3,7 @@ package nachos.threads;
 import nachos.machine.*;
 
 import java.util.LinkedList;
+import java.util.List;
 
 /**
  * An implementation of condition variables that disables interrupt()s for
@@ -23,6 +24,7 @@ public class Condition2 {
 	 */
 	public Condition2(Lock conditionLock) {
 		this.conditionLock = conditionLock;
+		waitForCondQueue = new LinkedList<>();
 	}
 
 	/**
@@ -34,7 +36,7 @@ public class Condition2 {
 	public void sleep() {
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
 
-		waitQueue.waitForAccess(KThread.currentThread());
+		waitForCondQueue.add(KThread.currentThread());
 		conditionLock.release();
 		boolean intStatus = Machine.interrupt().disable();
 		KThread.sleep();
@@ -49,14 +51,13 @@ public class Condition2 {
 	public void wake() {
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
 
-		boolean intStatus = Machine.interrupt().disable();
-
-		KThread thread = waitQueue.nextThread();
-		if (thread != null) {
-			thread.ready();
+		if (!waitForCondQueue.isEmpty()) {
+			boolean intStatus = Machine.interrupt().disable();
+			waitForCondQueue.removeFirst().ready();
+			Machine.interrupt().restore(intStatus);
 		}
 
-		Machine.interrupt().restore(intStatus);
+
 	}
 
 	/**
@@ -66,18 +67,14 @@ public class Condition2 {
 	public void wakeAll() {
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
 
-		KThread thread = waitQueue.nextThread();
-		while (thread != null) {
-			boolean intStatus = Machine.interrupt().disable();
-			thread.ready();
-			Machine.interrupt().restore(intStatus);
-			thread = waitQueue.nextThread();
-		}
+        while (!waitForCondQueue.isEmpty())
+            wake();
 	}
 
 	private Lock conditionLock;
 
-//	private LinkedList<KThread> waitQueue;
-	private ThreadQueue waitQueue = ThreadedKernel.scheduler
-			.newThreadQueue(false);
+	private LinkedList<KThread> waitForCondQueue;
+//	we should not use system queue
+//	private ThreadQueue waitQueue = ThreadedKernel.scheduler
+//			.newThreadQueue(false);
 }
