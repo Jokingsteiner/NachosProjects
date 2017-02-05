@@ -492,7 +492,55 @@ public class KThread {
 		T2.fork();
 		T1.fork();
 
+		// should not join T2 here since we know T2 is joined in T1 already
 		T1.join();
+		T3.join();
+	}
+
+	private static void alarmTest() {
+		System.out.println("Alarm Test Start!");
+		Alarm myAlarm = new Alarm();
+		KThread T1 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				System.out.println("T1 starts @" + Machine.timer().getTime());
+				// timerInterrupt() is called at tick 490, 1020 in our test
+				// T1 start at 170, x = 321 so it is 492>490, for testing
+				myAlarm.waitUntil(322);
+				for (int i = 0; i < 3; i++)
+					System.out.println("loop" + i + " @T1 @" + Machine.timer().getTime());
+//				currentThread.yield();
+			}
+		});
+
+		KThread T2 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				for (int i = 0; i < 3; i++)
+					System.out.println("loop" + i + " @T2 @" + Machine.timer().getTime());
+//				currentThread.yield();
+			}
+		});
+
+		KThread T3 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				System.out.println("T3 starts @" + Machine.timer().getTime());
+				// T3 starts at 190 ticks in our test
+				// Thus, T3 has return time @491 while T1's return time is 492
+				// We implemented by priorityQueue(ordered by return time)
+				// Glad to see T3 continue first before T1 because of priority
+				myAlarm.waitUntil(301);
+				for (int i = 0; i < 3; i++)
+					System.out.println("loop" + i + " @T3 @" + Machine.timer().getTime());
+//				currentThread.yield();
+			}
+		});
+		T1.fork();
+		T2.fork();
+		T3.fork();
+		T1.join();
+		T2.join();
 		T3.join();
 	}
 
@@ -504,8 +552,12 @@ public class KThread {
 
 		new KThread(new PingTest(1)).setName("forked thread").fork();
 		new PingTest(0).run();
+/*		System.out.println(Machine.timer().getTime());
+		for (long i = 0; i < 100000000; i++){}
+		System.out.println(Machine.timer().getTime());*/
 		// joinTest();
-		condVarTest();
+//		condVarTest();
+		alarmTest();
 
 	}
 
