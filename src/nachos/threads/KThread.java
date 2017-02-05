@@ -409,6 +409,81 @@ public class KThread {
 		private int which;
 	}
 
+	private static void joinTest() {
+		System.out.println("Join() Test Start!");
+		KThread T1 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				for (int i = 0; i < 3; i++)
+					System.out.println("loop" + i + " @T1");
+//				currentThread.yield();
+			}
+		});
+		KThread T2 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				T1.join();
+				for (int i = 0; i < 3; i++)
+					System.out.println("loop" + i + " @T2");
+//				currentThread.yield();
+			}
+		});
+		KThread T3 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				T2.join();
+				for (int i = 0; i < 3; i++)
+					System.out.println("loop" + i + " @T3");
+//				currentThread.yield();
+			}
+		});
+		T2.fork();
+		T1.setName("Thread1").fork();
+
+		T3.fork();
+	}
+
+	private static void condVarTest() {
+		System.out.println("Conditional Variable Test Start!");
+		Condition cond = new Condition(new Lock());
+//		Condition2 cond = new Condition2(new Lock());
+
+		KThread T2 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				for (int i = 0; i < 3; i++)
+					System.out.println("loop" + i + " @T2");
+			}
+		});
+
+		KThread T1 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				T2.join();
+				for (int i = 0; i < 3; i++) {
+					if (i == 1)
+						cond.wake();
+					System.out.println("loop" + i + " @T1");
+				}
+			}
+		});
+
+		KThread T3 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				for (int i = 0; i < 3; i++) {
+					if (i == 2)
+						cond.sleep();
+					System.out.println("loop" + i + " @T3");
+				}
+			}
+		});
+		T2.fork();
+		T1.setName("Thread1").fork();
+
+		T3.fork();
+	}
+
 	/**
 	 * Tests whether this module is working.
 	 */
@@ -417,13 +492,9 @@ public class KThread {
 
 		new KThread(new PingTest(1)).setName("forked thread").fork();
 		new PingTest(0).run();
-/*		KThread T1 = new KThread(new Runnable() {
-			@Override
-			public void run() {
-				System.out.println("I am T1");
-			}
-		});
-		T1.fork();*/
+		// joinTest();
+		condVarTest();
+
 	}
 
 	private static final char dbgThread = 't';
