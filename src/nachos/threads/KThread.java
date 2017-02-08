@@ -544,7 +544,63 @@ public class KThread {
 		T3.join();
 	}
 
+	private static void commTest() {
+		System.out.println("commTest Start!");
+		Alarm myAlarm = new Alarm();
+		Communicator comm = new Communicator();
+		KThread T1 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				int msg = 1;
+				System.out.println("T1 starts @" + Machine.timer().getTime());
+				myAlarm.waitUntil(2500);
+				comm.speak(msg);
+				System.out.println("T1 return from speak()");
+			}
+		});
+
+		KThread T2 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				int msg = 2;
+				System.out.println("T2 starts @" + Machine.timer().getTime());
+				comm.speak(msg);
+				System.out.println("T2 return from speak()");
+			}
+		});
+
+		KThread T3 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				int msg = 3;
+				System.out.println("T3 starts @" + Machine.timer().getTime());
+				myAlarm.waitUntil(500);
+				int received = comm.listen();
+				System.out.println("T3 return from listen() with msg#" + received);
+			}
+		});
+
+		KThread T4 = new KThread(new Runnable() {
+			@Override
+			public void run() {
+				int msg = 4;
+				System.out.println("T4 starts @" + Machine.timer().getTime());
+				myAlarm.waitUntil(1800);
+				int received = comm.listen();
+				System.out.println("T4 return from listen() with msg#" + received);
+			}
+		});
+		T1.setName("Speaker1").fork();
+		T2.setName("Speaker2").fork();
+		T3.setName("Listener1").fork();
+		T4.setName("Listener2").fork();
+		T1.join();
+		T2.join();
+		T3.join();
+		T4.join();
+	}
 	/**
+	 *
 	 * Tests whether this module is working.
 	 */
 	public static void selfTest() {
@@ -557,8 +613,8 @@ public class KThread {
 		System.out.println(Machine.timer().getTime());*/
 		// joinTest();
 //		condVarTest();
-		alarmTest();
-
+//		alarmTest();
+		commTest();
 	}
 
 	private static final char dbgThread = 't';
