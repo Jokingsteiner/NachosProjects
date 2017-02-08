@@ -552,10 +552,10 @@ public class KThread {
 			@Override
 			public void run() {
 				int msg = 1;
-				System.out.println("T1 starts @" + Machine.timer().getTime());
 				myAlarm.waitUntil(2500);
+				System.out.println("T1 starts speaking@" + Machine.timer().getTime());
 				comm.speak(msg);
-				System.out.println("T1 return from speak()");
+				System.out.println("T1 return from speak() @" + Machine.timer().getTime());
 			}
 		});
 
@@ -563,9 +563,10 @@ public class KThread {
 			@Override
 			public void run() {
 				int msg = 2;
-				System.out.println("T2 starts @" + Machine.timer().getTime());
+				myAlarm.waitUntil(0);
+				System.out.println("T2 starts speaking@" + Machine.timer().getTime());
 				comm.speak(msg);
-				System.out.println("T2 return from speak()");
+				System.out.println("T2 return from speak() @" + Machine.timer().getTime());
 			}
 		});
 
@@ -573,10 +574,10 @@ public class KThread {
 			@Override
 			public void run() {
 				int msg = 3;
-				System.out.println("T3 starts @" + Machine.timer().getTime());
 				myAlarm.waitUntil(500);
+				System.out.println("T3 starts listening@" + Machine.timer().getTime());
 				int received = comm.listen();
-				System.out.println("T3 return from listen() with msg#" + received);
+				System.out.println("T3 return from listen() with msg#" + received +  " @" + Machine.timer().getTime());
 			}
 		});
 
@@ -584,10 +585,10 @@ public class KThread {
 			@Override
 			public void run() {
 				int msg = 4;
-				System.out.println("T4 starts @" + Machine.timer().getTime());
 				myAlarm.waitUntil(1800);
+				System.out.println("T4 starts listening@" + Machine.timer().getTime());
 				int received = comm.listen();
-				System.out.println("T4 return from listen() with msg#" + received);
+				System.out.println("T4 return from listen() with msg#" + received + " @" + Machine.timer().getTime());
 			}
 		});
 		T1.setName("Speaker1").fork();
@@ -606,8 +607,8 @@ public class KThread {
 	public static void selfTest() {
 		Lib.debug(dbgThread, "Enter KThread.selfTest");
 
-		new KThread(new PingTest(1)).setName("forked thread").fork();
-		new PingTest(0).run();
+//		new KThread(new PingTest(1)).setName("forked thread").fork();
+//		new PingTest(0).run();
 /*		System.out.println(Machine.timer().getTime());
 		for (long i = 0; i < 100000000; i++){}
 		System.out.println(Machine.timer().getTime());*/
