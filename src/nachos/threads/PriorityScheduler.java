@@ -127,7 +127,7 @@ public class PriorityScheduler extends Scheduler {
         return (ThreadState) thread.schedulingState;
     }
 
-    // This is the comparator use to sort waitQueue(javaPQ) in the PriorityQueue
+    // This is the comparator use to sort waitThreads(nachosPQ) in the PriorityQueue
     private static class BY_THREADSTATE implements Comparator<ThreadState> {
         private nachos.threads.PriorityScheduler.PriorityQueue threadWaitQueue;
 
@@ -198,7 +198,7 @@ public class PriorityScheduler extends Scheduler {
                 return null;
             }
             else {
-                // let next thread (top of the waitQueue) to acquire resource
+                // let next thread (top of the waitThreads) to acquire resource
                 acquire(waitThreads.poll().thread);
                 return threadHolding;
             }
@@ -211,7 +211,7 @@ public class PriorityScheduler extends Scheduler {
          * @return the next thread that <tt>nextThread()</tt> would return.
          */
         protected ThreadState pickNextThread() {
-            // peek() will not remove the thread in waitQueue
+            // peek() will not remove the thread in waitThreads
             return waitThreads.peek();
         }
 
@@ -237,8 +237,12 @@ public class PriorityScheduler extends Scheduler {
         private HashSet<nachos.threads.PriorityScheduler.PriorityQueue> acquiredSet = new HashSet<nachos.threads.PriorityScheduler.PriorityQueue>();
 
         // a Map to store resources (nachosPQ) that this thread is waiting for
-        // also the start wating time is stored in the map for breaking tie
+        // Also, the time a thread start waiting a resources is stored in the map for breaking tie
+        // The waitThreads queue in each resources are sorted by the effective priority, when two threads has the
+        // same priority, the thread that wait longer should be placed ahead of the other thread in the queue
         protected HashMap<PriorityQueue,Long> waitingMap = new HashMap<nachos.threads.PriorityScheduler.PriorityQueue,Long>();
+
+
         /**
          * Allocate a new <tt>ThreadState</tt> object and associate it with the
          * specified thread.
@@ -355,7 +359,7 @@ public class PriorityScheduler extends Scheduler {
             if (!waitingMap.containsKey(waitQueue)) {
                 // dealing with some rare case (error handling)
                 // the calling thread may wanna wait for a resource that is already acquired
-                // since this is what she/he likes, we kindly release the resource for it and make him wa
+                // since this is what she/he likes, we kindly release the resource for it and make him wait
                 release(waitQueue);
 
                 // record the system time and put the resource in our waitingMap with priority
@@ -382,26 +386,27 @@ public class PriorityScheduler extends Scheduler {
          * @see nachos.threads.ThreadQueue#nextThread
          */
         public void acquire(PriorityQueue waitQueue) {
-            // by definition, acquire() should only be called when there is no thread holding hte resource(nachosPQ)
+            // by definition, acquire() should only be called when there is no thread holding the resource(nachosPQ)
             // here just make sure, if there is, release it
             if (waitQueue.threadHolding != null) {
                 getThreadState(waitQueue.threadHolding).release(waitQueue);
             }
 
-            //ATTENTION: the ipnut argument of the API is waitQueue, try not to be mislead
+            //ATTENTION: the input argument of the API is waitQueue, try not to be mislead
             // if this thread WAS waiting for the resources before,
             // acquiring the resource means we should remove this thread out of the resources waitQueue
             // this remove will do nothing
             waitQueue.waitThreads.remove(this);
 
-            // now we acquire the resource(JavaPQ)
+            // now we acquire the resource(nachosPQ)
             waitQueue.threadHolding = this.thread;
             // add the resource to our acquiredSet
             acquiredSet.add(waitQueue);
             // remove the resource from our waitingMap
             waitingMap.remove(waitQueue);
-            // be sure to updateEffectivePriority since the threadHolding of the resource is changing
-            // possible this thread has a low priority and acquiring a resource may should have given to other high priority thread
+            // be sure to updateEffectivePriority since we change the threadHolding of the resource "waitQueue"
+            // it is possible that the this new holder has a low priority
+            // than a thread waiting to access this resource
             updateEffectivePriority();
         }
 
