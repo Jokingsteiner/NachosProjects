@@ -600,6 +600,54 @@ public class KThread {
 		T3.join();
 		T4.join();
 	}
+
+	private static void PQTest() {
+		System.out.println("PQ Test Start!");
+		ThreadQueue pq1 = ThreadedKernel.scheduler.newThreadQueue(true);
+		ThreadQueue pq2 = ThreadedKernel.scheduler.newThreadQueue(true);
+		ThreadQueue pq3 = ThreadedKernel.scheduler.newThreadQueue(true);
+		KThread thread1 = new KThread(), thread2 = new KThread(), thread3 = new KThread(), thread4 = new KThread();
+		thread1.setName("T1");
+		thread2.setName("T2");
+		thread3.setName("T3");
+		thread4.setName("T4");
+
+		boolean status = Machine.interrupt().disable();
+
+
+		pq1.waitForAccess(thread1);
+		pq2.waitForAccess(thread2);
+		pq3.waitForAccess(thread3);
+
+		pq1.acquire(thread2);
+		pq2.acquire(thread3);
+		pq3.acquire(thread4);
+//        System.out.println("Priority of thread1 is " + ThreadedKernel.scheduler.getPriority(thread1) + " , Effective: " + ThreadedKernel.scheduler.getEffectivePriority(thread1));
+		ThreadedKernel.scheduler.setPriority(thread1, 6);
+
+//        System.out.println("Priority of thread1 is " + ThreadedKernel.scheduler.getPriority(thread1) + " , Effective: " + ThreadedKernel.scheduler.getEffectivePriority(thread1));
+//        System.out.println(ThreadedKernel.scheduler.getEffectivePriority(thread2));
+//        System.out.println(ThreadedKernel.scheduler.getEffectivePriority(thread3));
+
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==6);
+
+		KThread kt_5 = new KThread();
+
+		ThreadedKernel.scheduler.setPriority(kt_5, 7);
+		kt_5.setName("T5");
+		pq1.waitForAccess(kt_5);
+
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread1)==6);
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==7);
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread3)==7);
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==7);
+
+		pq1.nextThread();
+
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==1);
+
+		Machine.interrupt().restore(status);
+	}
 	/**
 	 *
 	 * Tests whether this module is working.
@@ -615,7 +663,9 @@ public class KThread {
 		// joinTest();
 //		condVarTest();
 //		alarmTest();
-		commTest();
+//		commTest();
+		PQTest();
+//		new PriorityScheduler().selfTest();
 	}
 
 	private static final char dbgThread = 't';
