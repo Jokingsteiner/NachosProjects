@@ -603,15 +603,24 @@ public class KThread {
 
 	private static void PQTest() {
 		System.out.println("PQ Test Start!");
+		// no need to run thread for testing the scheduler,
+        // we just need to check the change of priority
 		ThreadQueue pq1 = ThreadedKernel.scheduler.newThreadQueue(true);
 		ThreadQueue pq2 = ThreadedKernel.scheduler.newThreadQueue(true);
 		ThreadQueue pq3 = ThreadedKernel.scheduler.newThreadQueue(true);
-		KThread thread1 = new KThread(), thread2 = new KThread(), thread3 = new KThread(), thread4 = new KThread();
+		KThread thread1 = new KThread();
+        KThread thread2 = new KThread();
+        KThread thread3 = new KThread();
+        KThread thread4 = new KThread();
+        KThread thread5 = new KThread();
+
 		thread1.setName("T1");
 		thread2.setName("T2");
 		thread3.setName("T3");
 		thread4.setName("T4");
+        thread5.setName("T5");
 
+        // user should disable interrupt before calling waitForAccess() and acquire()
 		boolean status = Machine.interrupt().disable();
 
 
@@ -626,25 +635,34 @@ public class KThread {
 		ThreadedKernel.scheduler.setPriority(thread1, 6);
 
 //        System.out.println("Priority of thread1 is " + ThreadedKernel.scheduler.getPriority(thread1) + " , Effective: " + ThreadedKernel.scheduler.getEffectivePriority(thread1));
-//        System.out.println(ThreadedKernel.scheduler.getEffectivePriority(thread2));
-//        System.out.println(ThreadedKernel.scheduler.getEffectivePriority(thread3));
 
+
+        // when the priority of thread2 be promoted, thread3 are promoted too, same as thread4
+        Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==6);
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==6);
 
-		KThread kt_5 = new KThread();
+		ThreadedKernel.scheduler.setPriority(thread5, 7);
+		pq1.waitForAccess(thread5);
 
-		ThreadedKernel.scheduler.setPriority(kt_5, 7);
-		kt_5.setName("T5");
-		pq1.waitForAccess(kt_5);
-
+		// because no thread is running, so the pq1 is still acquired by thread2
+        // Thus, thread1's priority will not be affected.
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread1)==6);
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==7);
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread3)==7);
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==7);
 
+        ThreadedKernel.scheduler.setPriority(thread2, 3);
+        // even manual set the priority of thread2 to 3, by recalculating effective priority,
+        // thread2 ,3 4 still have effective priority 7 because thread 5
+        Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==7);
+        Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread3)==7);
+        Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==7);
+
+        // once the pq1 is unlocked from thread2. thread2, 3, 4's effective priority will depend on the highest one
+        // i.e. thread2's priority
 		pq1.nextThread();
 
-		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==1);
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==3);
 
 		Machine.interrupt().restore(status);
 	}
@@ -660,12 +678,11 @@ public class KThread {
 /*		System.out.println(Machine.timer().getTime());
 		for (long i = 0; i < 100000000; i++){}
 		System.out.println(Machine.timer().getTime());*/
-		// joinTest();
+//      joinTest();
 //		condVarTest();
 //		alarmTest();
 //		commTest();
-		PQTest();
-//		new PriorityScheduler().selfTest();
+//		PQTest();
 	}
 
 	private static final char dbgThread = 't';
