@@ -52,9 +52,9 @@ public class Communicator {
 	 * @return the integer transferred.
 	 */
 	public int listen() {
-		++this.listenCount;
 		int ret;
 		commLock.acquire();
+		++this.listenCount;
 
 		while(!inTransaction) {
 			if(speakCount>0)
@@ -63,11 +63,10 @@ public class Communicator {
 		}
 		ret = msg;
 		inTransaction = false;
+		--listenCount;
 		if(listenCount>0 && speakCount>0)
 			speakQueue.wake();
-
 		commLock.release();
-		--listenCount;
 		return ret;
 	}
 

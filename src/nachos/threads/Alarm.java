@@ -56,7 +56,7 @@ public class Alarm {
 	 * should be run.
 	 */
 	public void timerInterrupt() {
-		while (!suspendedQueue.isEmpty() && suspendedQueue.peek().returnTime < Machine.timer().getTime()){
+		while (!suspendedQueue.isEmpty() && suspendedQueue.peek().returnTime <= Machine.timer().getTime()){
 				boolean intStatus = Machine.interrupt().disable();
 				suspendedQueue.poll().thread.ready();
 				Machine.interrupt().restore(intStatus);

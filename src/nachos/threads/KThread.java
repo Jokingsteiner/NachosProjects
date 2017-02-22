@@ -202,7 +202,11 @@ public class KThread {
 		toBeDestroyed = currentThread;
 
 		currentThread.status = statusFinished;
-
+		KThread threadToBeWake;
+		while ((threadToBeWake = joinThreadQueue.nextThread()) != null) {
+			if (threadToBeWake.status != statusReady)
+				threadToBeWake.ready();
+		}
 		sleep();
 	}
 
@@ -284,9 +288,12 @@ public class KThread {
 		Lib.debug(dbgThread, "Joining to thread: " + toString());
 
 		Lib.assertTrue(this != currentThread);
-
-		while (this.status != statusFinished)
-			yield();
+		boolean intStatus = Machine.interrupt().disable();
+		while (this.status != statusFinished) {
+			joinThreadQueue.waitForAccess(currentThread);
+			sleep();
+		}
+		Machine.interrupt().restore(intStatus);
 	}
 
 	/**
@@ -678,7 +685,7 @@ public class KThread {
 /*		System.out.println(Machine.timer().getTime());
 		for (long i = 0; i < 100000000; i++){}
 		System.out.println(Machine.timer().getTime());*/
-//      joinTest();
+      	joinTest();
 //		condVarTest();
 //		alarmTest();
 //		commTest();
@@ -733,4 +740,6 @@ public class KThread {
 	private static KThread toBeDestroyed = null;
 
 	private static KThread idleThread = null;
+
+	private static ThreadQueue joinThreadQueue = ThreadedKernel.scheduler.newThreadQueue(true);
 }
