@@ -685,7 +685,7 @@ public class KThread {
 /*		System.out.println(Machine.timer().getTime());
 		for (long i = 0; i < 100000000; i++){}
 		System.out.println(Machine.timer().getTime());*/
-      	joinTest();
+//      	joinTest();
 //		condVarTest();
 //		alarmTest();
 //		commTest();

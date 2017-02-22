@@ -8,16 +8,16 @@ import java.util.List;
 /**
  * An implementation of condition variables that disables interrupt()s for
  * synchronization.
- * 
+ *
  * <p>
  * You must implement this.
- * 
+ *
  * @see nachos.threads.Condition
  */
 public class Condition2 {
 	/**
 	 * Allocate a new condition variable.
-	 * 
+	 *
 	 * @param conditionLock the lock associated with this condition variable.
 	 * The current thread must hold this lock whenever it uses <tt>sleep()</tt>,
 	 * <tt>wake()</tt>, or <tt>wakeAll()</tt>.
@@ -36,9 +36,9 @@ public class Condition2 {
 	public void sleep() {
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
 
+		boolean intStatus = Machine.interrupt().disable();
 		waitForCondQueue.add(KThread.currentThread());
 		conditionLock.release();
-		boolean intStatus = Machine.interrupt().disable();
 		KThread.sleep();
 		Machine.interrupt().restore(intStatus);
 		conditionLock.acquire();
