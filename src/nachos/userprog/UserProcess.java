@@ -5,6 +5,9 @@ import nachos.threads.*;
 import nachos.userprog.*;
 
 import java.io.EOFException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 
 /**
  * Encapsulates the state of a user process that is not contained in its user
@@ -27,6 +30,13 @@ public class UserProcess {
 		pageTable = new TranslationEntry[numPhysPages];
 		for (int i = 0; i < numPhysPages; i++)
 			pageTable[i] = new TranslationEntry(i, i, true, false, false, false);
+
+		/** initialize file availableDescriptors */
+		availableDescriptors = new ArrayList<Integer>(Arrays.asList(2,3,4,5,6,7,8,9,10,11,12,13,14,15));
+
+		/** reserved for stdin and stdout(by requirement) */
+		openFileMap[0] = UserKernel.console.openForReading();
+		openFileMap[1] = UserKernel.console.openForWriting();
 	}
 
 	/**
@@ -333,6 +343,18 @@ public class UserProcess {
 	}
 
 	/**
+	 *  help function for system calls
+	 */
+
+	protected boolean checkVirtualAddress(int vAddress) {
+		int locatedPage = Processor.pageFromAddress(vAddress);
+		if (locatedPage >= 0 && locatedPage < numPages)
+			return true;
+		else
+			return false;
+	}
+
+	/**
 	 * Handle the halt() system call.
 	 */
 	private int handleHalt() {
@@ -341,6 +363,68 @@ public class UserProcess {
 
 		Lib.assertNotReached("Machine.halt() did not halt machine!");
 		return 0;
+	}
+
+	/**
+	 *
+	 * @param vAddr in memory system, the address is use
+	 * @return
+	 */
+
+	private int handleCreat(int vAddr) {
+		String filename;
+		OpenFile file;
+
+		if (!checkVirtualAddress(vAddr))
+			return -1;
+
+		// in the requirement, the passed in vAddr from user program is defined up to 255
+		if ( (filename = this.readVirtualMemoryString(vAddr, 255)) == null )
+			return -1;
+
+		// a process should maintain up to 16 open filed at same time,
+		// 0 for stdin and 1 for stdout. Thus, we have 14 available descriptor for opening/creating file
+		if (availableDescriptors.size() < 1) {
+			return -1;
+		}
+
+		// get physical address for the desired file, "true" means "create"
+		if ( (file = ThreadedKernel.fileSystem.open(filename, true)) == null )
+			return -1;
+
+		// get next available file descriptor
+		Integer fileDescriptor = availableDescriptors.remove(0);
+		openFileMap[fileDescriptor] = file;
+
+		return fileDescriptor;
+	}
+
+	private int handleOpen(int vAddr) {
+		String filename;
+		OpenFile file;
+
+		if (!checkVirtualAddress(vAddr))
+			return -1;
+
+		// in the requirement, the passed in vAddr from user program is defined up to 255
+		if ( (filename = this.readVirtualMemoryString(vAddr, 255)) == null )
+			return -1;
+
+		// a process should maintain up to 16 open filed at same time,
+		// 0 for stdin and 1 for stdout. Thus, we have 14 available descriptor for opening/creating file
+		if (availableDescriptors.size() < 1) {
+			return -1;
+		}
+
+		// get physical address for the desired file, "true" means "create"
+		if ( (file = ThreadedKernel.fileSystem.open(filename, false)) == null )
+			return -1;
+
+		// get next available file descriptor
+		Integer fileDescriptor = availableDescriptors.remove(0);
+		openFileMap[fileDescriptor] = file;
+
+		return fileDescriptor;
 	}
 
 	private static final int syscallHalt = 0, syscallExit = 1, syscallExec = 2,
@@ -413,7 +497,10 @@ public class UserProcess {
 		switch (syscall) {
 		case syscallHalt:
 			return handleHalt();
-
+		case syscallCreate:
+			return handleCreat(a0);
+		case syscallOpen:
+			return handleOpen(a0);
 		default:
 			Lib.debug(dbgProcess, "Unknown syscall " + syscall);
 			Lib.assertNotReached("Unknown system call!");
@@ -468,4 +555,11 @@ public class UserProcess {
 	private static final int pageSize = Processor.pageSize;
 
 	private static final char dbgProcess = 'a';
+
+	/** The list to track available descriptors. */
+	ArrayList<Integer> availableDescriptors;
+
+	/** Map file descriptor to open file. */
+	OpenFile openFileMap[] = new OpenFile[16];
+
 }
