@@ -19,6 +19,7 @@ public class Communicator {
 		this.commLock = new Lock();
 		this.speakQueue = new Condition2(this.commLock);
 		this.listenQueue = new Condition2(this.commLock);
+		this.finishedQueue = new Condition2(this.commLock);
 	}
 
 	/**
@@ -41,11 +42,12 @@ public class Communicator {
 		msg = word;
 		listenQueue.wake();
 		--speakCount;
+		finishedQueue.sleep();
 		commLock.release();
 		return;
-	}
+	 }
 
-	/**
+	 /**
 	 * Wait for a thread to speak through this communicator, and then return the
 	 * <i>word</i> that thread passed to <tt>speak()</tt>.
 	 *
@@ -61,9 +63,11 @@ public class Communicator {
 				speakQueue.wake();
 			listenQueue.sleep();
 		}
+
 		ret = msg;
 		inTransaction = false;
 		--listenCount;
+		finishedQueue.wake();
 		if(listenCount>0 && speakCount>0)
 			speakQueue.wake();
 		commLock.release();
@@ -73,6 +77,7 @@ public class Communicator {
 	private Lock commLock = null;
 	private Condition2 speakQueue = null;
 	private Condition2 listenQueue = null;
+	private Condition2 finishedQueue = null;
 	private int speakCount = 0;
 	private int listenCount = 0;
 

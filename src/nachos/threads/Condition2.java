@@ -24,7 +24,7 @@ public class Condition2 {
 	 */
 	public Condition2(Lock conditionLock) {
 		this.conditionLock = conditionLock;
-		waitForCondQueue = new LinkedList<>();
+		waitForCondQueue = new LinkedList<KThread>();
 	}
 
 	/**
@@ -56,8 +56,6 @@ public class Condition2 {
 			waitForCondQueue.removeFirst().ready();
 			Machine.interrupt().restore(intStatus);
 		}
-
-
 	}
 
 	/**
@@ -67,8 +65,8 @@ public class Condition2 {
 	public void wakeAll() {
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
 
-        while (!waitForCondQueue.isEmpty())
-            wake();
+		while (!waitForCondQueue.isEmpty())
+			wake();
 	}
 
 	private Lock conditionLock;

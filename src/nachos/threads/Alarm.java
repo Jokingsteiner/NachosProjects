@@ -61,9 +61,8 @@ public class Alarm {
 				suspendedQueue.poll().thread.ready();
 				Machine.interrupt().restore(intStatus);
 		}
-			KThread.yield();
+//			KThread.yield();
 	}
-
 	/**
 	 * Put the current thread to sleep for at least <i>x</i> ticks, waking it up
 	 * in the timer interrupt handler. The thread must be woken up (placed in

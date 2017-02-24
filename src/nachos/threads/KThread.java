@@ -5,16 +5,16 @@ import nachos.machine.*;
 /**
  * A KThread is a thread that can be used to execute Nachos kernel code. Nachos
  * allows multiple threads to run concurrently.
- * 
+ *
  * To create a new thread of execution, first declare a class that implements
  * the <tt>Runnable</tt> interface. That class then implements the <tt>run</tt>
  * method. An instance of the class can then be allocated, passed as an argument
  * when creating <tt>KThread</tt>, and forked. For example, a thread that
  * computes pi could be written as follows:
- * 
+ *
  * <p>
  * <blockquote>
- * 
+ *
  * <pre>
  * class PiRun implements Runnable {
  * 	public void run() {
@@ -23,25 +23,25 @@ import nachos.machine.*;
  *     }
  * }
  * </pre>
- * 
+ *
  * </blockquote>
  * <p>
  * The following code would then create a thread and start it running:
- * 
+ *
  * <p>
  * <blockquote>
- * 
+ *
  * <pre>
  * PiRun p = new PiRun();
  * new KThread(p).fork();
  * </pre>
- * 
+ *
  * </blockquote>
  */
 public class KThread {
 	/**
 	 * Get the current thread.
-	 * 
+	 *
 	 * @return the current thread.
 	 */
 	public static KThread currentThread() {
@@ -72,7 +72,7 @@ public class KThread {
 
 	/**
 	 * Allocate a new KThread.
-	 * 
+	 *
 	 * @param target the object whose <tt>run</tt> method is called.
 	 */
 	public KThread(Runnable target) {
@@ -82,7 +82,7 @@ public class KThread {
 
 	/**
 	 * Set the target of this thread.
-	 * 
+	 *
 	 * @param target the object whose <tt>run</tt> method is called.
 	 * @return this thread.
 	 */
@@ -96,7 +96,7 @@ public class KThread {
 	/**
 	 * Set the name of this thread. This name is used for debugging purposes
 	 * only.
-	 * 
+	 *
 	 * @param name the name to give to this thread.
 	 * @return this thread.
 	 */
@@ -108,7 +108,7 @@ public class KThread {
 	/**
 	 * Get the name of this thread. This name is used for debugging purposes
 	 * only.
-	 * 
+	 *
 	 * @return the name given to this thread.
 	 */
 	public String getName() {
@@ -118,7 +118,7 @@ public class KThread {
 	/**
 	 * Get the full name of this thread. This includes its name along with its
 	 * numerical ID. This name is used for debugging purposes only.
-	 * 
+	 *
 	 * @return the full name given to this thread.
 	 */
 	public String toString() {
@@ -185,7 +185,7 @@ public class KThread {
 	 * Finish the current thread and schedule it to be destroyed when it is safe
 	 * to do so. This method is automatically called when a thread's
 	 * <tt>run</tt> method returns, but it may also be called directly.
-	 * 
+	 *
 	 * The current thread cannot be immediately destroyed because its stack and
 	 * other execution state are still in use. Instead, this thread will be
 	 * destroyed automatically by the next thread to run, when it is safe to
@@ -214,12 +214,12 @@ public class KThread {
 	 * Relinquish the CPU if any other thread is ready to run. If so, put the
 	 * current thread on the ready queue, so that it will eventually be
 	 * rescheuled.
-	 * 
+	 *
 	 * <p>
 	 * Returns immediately if no other thread is ready to run. Otherwise returns
 	 * when the current thread is chosen to run again by
 	 * <tt>readyQueue.nextThread()</tt>.
-	 * 
+	 *
 	 * <p>
 	 * Interrupts are disabled, so that the current thread can atomically add
 	 * itself to the ready queue and switch to the next thread. On return,
@@ -243,7 +243,7 @@ public class KThread {
 	/**
 	 * Relinquish the CPU, because the current thread has either finished or it
 	 * is blocked. This thread must be the current thread.
-	 * 
+	 *
 	 * <p>
 	 * If the current thread is blocked (on a synchronization primitive, i.e. a
 	 * <tt>Semaphore</tt>, <tt>Lock</tt>, or <tt>Condition</tt>), eventually
@@ -301,7 +301,7 @@ public class KThread {
 	 * and <tt>runNextThread()</tt> is called, it will run the idle thread. The
 	 * idle thread must never block, and it will only be allowed to run when all
 	 * other threads are blocked.
-	 * 
+	 *
 	 * <p>
 	 * Note that <tt>ready()</tt> never adds the idle thread to the ready set.
 	 */
@@ -338,17 +338,17 @@ public class KThread {
 	 * switch to the new thread by calling <tt>TCB.contextSwitch()</tt>, and
 	 * load the state of the new thread. The new thread becomes the current
 	 * thread.
-	 * 
+	 *
 	 * <p>
 	 * If the new thread and the old thread are the same, this method must still
 	 * call <tt>saveState()</tt>, <tt>contextSwitch()</tt>, and
 	 * <tt>restoreState()</tt>.
-	 * 
+	 *
 	 * <p>
 	 * The state of the previously running thread must already have been changed
 	 * from running to blocked or ready (depending on whether the thread is
 	 * sleeping or yielding).
-	 * 
+	 *
 	 * @param finishing <tt>true</tt> if the current thread is finished, and
 	 * should be destroyed by the new thread.
 	 */
@@ -418,7 +418,8 @@ public class KThread {
 
 	private static void joinTest() {
 		System.out.println("Join() Test Start!");
-		KThread T1 = new KThread(new Runnable() {
+		final KThread T1;
+		T1 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				for (int i = 0; i < 3; i++)
@@ -426,7 +427,8 @@ public class KThread {
 //				currentThread.yield();
 			}
 		});
-		KThread T2 = new KThread(new Runnable() {
+		final KThread T2;
+		T2 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				T1.join();
@@ -435,7 +437,8 @@ public class KThread {
 //				currentThread.yield();
 			}
 		});
-		KThread T3 = new KThread(new Runnable() {
+		final KThread T3;
+		T3 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				T2.join();
@@ -452,11 +455,11 @@ public class KThread {
 
 	private static void condVarTest() {
 		System.out.println("Conditional Variable Test Start!");
-		Lock mutexLock = new Lock();
-//		Condition cond = new Condition(mutexLock);
-		Condition2 cond = new Condition2(mutexLock);
+		final Lock mutexLock = new Lock();
+		final Condition2 cond = new Condition2(mutexLock);
 
-		KThread T2 = new KThread(new Runnable() {
+		final KThread T2;
+		T2 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				for (int i = 0; i < 3; i++)
@@ -464,30 +467,32 @@ public class KThread {
 			}
 		});
 
-		KThread T1 = new KThread(new Runnable() {
+		final KThread T1;
+		T1 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				T2.join();
 				for (int i = 0; i < 50; i++) {
 					if (i == 48) {
-                        mutexLock.acquire();
-                        cond.wake();
-                        mutexLock.release();
-                    }
+						mutexLock.acquire();
+						cond.wake();
+						mutexLock.release();
+					}
 					System.out.println("loop" + i + " @T1");
 				}
 			}
 		});
 
-		KThread T3 = new KThread(new Runnable() {
+		final KThread T3;
+		T3 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				for (int i = 0; i < 3; i++) {
-                    if (i == 2) {
-                        mutexLock.acquire();
-                        cond.sleep();
-                        mutexLock.release();
-                    }
+					if (i == 2) {
+						mutexLock.acquire();
+						cond.sleep();
+						mutexLock.release();
+					}
 					System.out.println("loop" + i + " @T3");
 				}
 			}
@@ -506,8 +511,9 @@ public class KThread {
 
 	private static void alarmTest() {
 		System.out.println("Alarm Test Start!");
-		Alarm myAlarm = new Alarm();
-		KThread T1 = new KThread(new Runnable() {
+		final Alarm myAlarm = new Alarm();
+		final KThread T1;
+		T1 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				System.out.println("T1 starts @" + Machine.timer().getTime());
@@ -520,7 +526,8 @@ public class KThread {
 			}
 		});
 
-		KThread T2 = new KThread(new Runnable() {
+		final KThread T2;
+		T2 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				for (int i = 0; i < 3; i++)
@@ -529,7 +536,8 @@ public class KThread {
 			}
 		});
 
-		KThread T3 = new KThread(new Runnable() {
+		final KThread T3;
+		T3 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				System.out.println("T3 starts @" + Machine.timer().getTime());
@@ -553,9 +561,10 @@ public class KThread {
 
 	private static void commTest() {
 		System.out.println("commTest Start!");
-		Alarm myAlarm = new Alarm();
-		Communicator comm = new Communicator();
-		KThread T1 = new KThread(new Runnable() {
+		final Alarm myAlarm = new Alarm();
+		final Communicator comm = new Communicator();
+		final KThread T1;
+		T1 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				int msg = 1;
@@ -566,7 +575,8 @@ public class KThread {
 			}
 		});
 
-		KThread T2 = new KThread(new Runnable() {
+		final KThread T2;
+		T2 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				int msg = 2;
@@ -577,7 +587,8 @@ public class KThread {
 			}
 		});
 
-		KThread T3 = new KThread(new Runnable() {
+		final KThread T3;
+		T3 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				int msg = 3;
@@ -588,7 +599,8 @@ public class KThread {
 			}
 		});
 
-		KThread T4 = new KThread(new Runnable() {
+		final KThread T4;
+		T4 = new KThread(new Runnable() {
 			@Override
 			public void run() {
 				int msg = 4;
@@ -611,23 +623,23 @@ public class KThread {
 	private static void PQTest() {
 		System.out.println("PQ Test Start!");
 		// no need to run thread for testing the scheduler,
-        // we just need to check the change of priority
+		// we just need to check the change of priority
 		ThreadQueue pq1 = ThreadedKernel.scheduler.newThreadQueue(true);
 		ThreadQueue pq2 = ThreadedKernel.scheduler.newThreadQueue(true);
 		ThreadQueue pq3 = ThreadedKernel.scheduler.newThreadQueue(true);
 		KThread thread1 = new KThread();
-        KThread thread2 = new KThread();
-        KThread thread3 = new KThread();
-        KThread thread4 = new KThread();
-        KThread thread5 = new KThread();
+		KThread thread2 = new KThread();
+		KThread thread3 = new KThread();
+		KThread thread4 = new KThread();
+		KThread thread5 = new KThread();
 
 		thread1.setName("T1");
 		thread2.setName("T2");
 		thread3.setName("T3");
 		thread4.setName("T4");
-        thread5.setName("T5");
+		thread5.setName("T5");
 
-        // user should disable interrupt before calling waitForAccess() and acquire()
+		// user should disable interrupt before calling waitForAccess() and acquire()
 		boolean status = Machine.interrupt().disable();
 
 
@@ -644,29 +656,29 @@ public class KThread {
 //        System.out.println("Priority of thread1 is " + ThreadedKernel.scheduler.getPriority(thread1) + " , Effective: " + ThreadedKernel.scheduler.getEffectivePriority(thread1));
 
 
-        // when the priority of thread2 be promoted, thread3 are promoted too, same as thread4
-        Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==6);
+		// when the priority of thread2 be promoted, thread3 are promoted too, same as thread4
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==6);
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==6);
 
 		ThreadedKernel.scheduler.setPriority(thread5, 7);
 		pq1.waitForAccess(thread5);
 
 		// because no thread is running, so the pq1 is still acquired by thread2
-        // Thus, thread1's priority will not be affected.
+		// Thus, thread1's priority will not be affected.
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread1)==6);
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==7);
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread3)==7);
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==7);
 
-        ThreadedKernel.scheduler.setPriority(thread2, 3);
-        // even manual set the priority of thread2 to 3, by recalculating effective priority,
-        // thread2 ,3 4 still have effective priority 7 because thread 5
-        Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==7);
-        Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread3)==7);
-        Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==7);
+		ThreadedKernel.scheduler.setPriority(thread2, 3);
+		// even manual set the priority of thread2 to 3, by recalculating effective priority,
+		// thread2 ,3 4 still have effective priority 7 because thread 5
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread2)==7);
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread3)==7);
+		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==7);
 
-        // once the pq1 is unlocked from thread2. thread2, 3, 4's effective priority will depend on the highest one
-        // i.e. thread2's priority
+		// once the pq1 is unlocked from thread2. thread2, 3, 4's effective priority will depend on the highest one
+		// i.e. thread2's priority
 		pq1.nextThread();
 
 		Lib.assertTrue(ThreadedKernel.scheduler.getEffectivePriority(thread4)==3);
@@ -696,7 +708,7 @@ public class KThread {
 
 	/**
 	 * Additional state used by schedulers.
-	 * 
+	 *
 	 * @see nachos.threads.PriorityScheduler.ThreadState
 	 */
 	public Object schedulingState = null;
