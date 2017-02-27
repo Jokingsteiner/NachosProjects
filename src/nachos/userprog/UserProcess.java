@@ -7,17 +7,16 @@ import nachos.userprog.*;
 import java.io.EOFException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 
 /**
  * Encapsulates the state of a user process that is not contained in its user
  * thread (or threads). This includes its address translation state, a file
  * table, and information about the program being executed.
- * 
+ *
  * <p>
  * This class is extended by other classes to support additional functionality
  * (such as additional syscalls).
- * 
+ *
  * @see nachos.vm.VMProcess
  * @see nachos.network.NetProcess
  */
@@ -45,7 +44,7 @@ public class UserProcess {
 	 * Allocate and return a new process of the correct class. The class name is
 	 * specified by the <tt>nachos.conf</tt> key
 	 * <tt>Kernel.processClassName</tt>.
-	 * 
+	 *
 	 * @return a new process of the correct class.
 	 */
 	public static UserProcess newUserProcess() {
@@ -55,7 +54,7 @@ public class UserProcess {
 	/**
 	 * Execute the specified program with the specified arguments. Attempts to
 	 * load the program, and then forks a thread to run it.
-	 * 
+	 *
 	 * @param name the name of the file containing the executable.
 	 * @param args the arguments to pass to the executable.
 	 * @return <tt>true</tt> if the program was successfully executed.
@@ -90,7 +89,7 @@ public class UserProcess {
 	 * the null terminator, and convert it to a <tt>java.lang.String</tt>,
 	 * without including the null terminator. If no null terminator is found,
 	 * returns <tt>null</tt>.
-	 * 
+	 *
 	 * @param vaddr the starting virtual address of the null-terminated string.
 	 * @param maxLength the maximum number of characters in the string, not
 	 * including the null terminator.
@@ -115,7 +114,7 @@ public class UserProcess {
 	/**
 	 * Transfer data from this process's virtual memory to all of the specified
 	 * array. Same as <tt>readVirtualMemory(vaddr, data, 0, data.length)</tt>.
-	 * 
+	 *
 	 * @param vaddr the first byte of virtual memory to read.
 	 * @param data the array where the data will be stored.
 	 * @return the number of bytes successfully transferred.
@@ -130,7 +129,7 @@ public class UserProcess {
 	 * <i>not</i> destroy the current process if an error occurs, but instead
 	 * should return the number of bytes successfully copied (or zero if no data
 	 * could be copied).
-	 * 
+	 *
 	 * @param vaddr the first byte of virtual memory to read.
 	 * @param data the array where the data will be stored.
 	 * @param offset the first byte to write in the array.
@@ -144,20 +143,39 @@ public class UserProcess {
 
 		byte[] memory = Machine.processor().getMemory();
 
+		// FIXME: not sure this is necessary or not
 		// for now, just assume that virtual addresses equal physical addresses
 		if (vaddr < 0 || vaddr >= memory.length)
 			return 0;
 
-		int amount = Math.min(length, memory.length - vaddr);
-		System.arraycopy(memory, vaddr, data, offset, amount);
+		// To record the number of bytes successfully copied (or zero if no data could be copied).
+		int totalTransf = 0;
 
-		return amount;
+		while(length > 0 && offset < data.length){
+			int addr = vaddr%1024;
+			int virtualP = vaddr/1024;
+			if(virtualP >= pageTable.length || virtualP < 0)
+				break;
+			TranslationEntry pte=pageTable[virtualP];
+			if(!pte.valid) break;
+			pte.used=true;
+			int physicalP=pte.ppn;
+			int physicalAddr=physicalP*1024+addr;
+			int amount = Math.min(data.length-offset, Math.min(length, 1024-addr));
+			System.arraycopy(memory, physicalAddr, data, offset, amount);
+			vaddr+=amount;
+			offset+=amount;
+			length-=amount;
+			totalTransf+=amount;
+		}
+
+		return totalTransf;
 	}
 
 	/**
 	 * Transfer all data from the specified array to this process's virtual
 	 * memory. Same as <tt>writeVirtualMemory(vaddr, data, 0, data.length)</tt>.
-	 * 
+	 *
 	 * @param vaddr the first byte of virtual memory to write.
 	 * @param data the array containing the data to transfer.
 	 * @return the number of bytes successfully transferred.
@@ -172,7 +190,7 @@ public class UserProcess {
 	 * <i>not</i> destroy the current process if an error occurs, but instead
 	 * should return the number of bytes successfully copied (or zero if no data
 	 * could be copied).
-	 * 
+	 *
 	 * @param vaddr the first byte of virtual memory to write.
 	 * @param data the array containing the data to transfer.
 	 * @param offset the first byte to transfer from the array.
@@ -186,14 +204,33 @@ public class UserProcess {
 
 		byte[] memory = Machine.processor().getMemory();
 
+		// FIXME: not sure this is necessary or not
 		// for now, just assume that virtual addresses equal physical addresses
 		if (vaddr < 0 || vaddr >= memory.length)
 			return 0;
 
-		int amount = Math.min(length, memory.length - vaddr);
-		System.arraycopy(data, offset, memory, vaddr, amount);
+		int totalTransf = 0;
 
-		return amount;
+		while(length>0&&offset<data.length){
+			int addr=vaddr%1024;
+			int virtualP=vaddr/1024;
+			if(virtualP>=pageTable.length||virtualP<0)
+				break;
+			TranslationEntry pte=pageTable[virtualP];
+			if(!pte.valid||pte.readOnly) break;
+			pte.used=true;
+			pte.dirty=true;
+			int physicalP=pte.ppn;
+			int physicalAddr=physicalP*1024+addr;
+			int amount = Math.min(data.length-offset, Math.min(length, 1024-addr));
+			System.arraycopy(data, offset, memory, physicalAddr, amount);
+			vaddr+=amount;
+			offset+=amount;
+			length-=amount;
+			totalTransf+=amount;
+		}
+
+		return totalTransf;
 	}
 
 	/**
@@ -201,7 +238,7 @@ public class UserProcess {
 	 * prepare to pass it the specified arguments. Opens the executable, reads
 	 * its header information, and copies sections and arguments into this
 	 * process's virtual memory.
-	 * 
+	 *
 	 * @param name the name of the file containing the executable.
 	 * @param args the arguments to pass to the executable.
 	 * @return <tt>true</tt> if the executable was successfully loaded.
@@ -287,7 +324,7 @@ public class UserProcess {
 	 * Allocates memory for this process, and loads the COFF sections into
 	 * memory. If this returns successfully, the process will definitely be run
 	 * (this is the last step in process initialization that can fail).
-	 * 
+	 *
 	 * @return <tt>true</tt> if the sections were successfully loaded.
 	 */
 	protected boolean loadSections() {
@@ -297,6 +334,23 @@ public class UserProcess {
 			return false;
 		}
 
+		pageTable=new TranslationEntry[numPages];
+
+		for(int i=0;i<numPages;i++){
+			int physicalP=UserKernel.allocPage();
+			if(physicalP<0){
+				Lib.debug(dbgProcess, "\tunable to allocate pages");
+				for(int j=0;j<i;j++){
+					if(pageTable[j].valid){
+						UserKernel.freePage(pageTable[j].ppn);
+						pageTable[j].valid=false;
+					}
+				}
+				coff.close();
+				return false;
+			}
+			pageTable[i]=new TranslationEntry(i,physicalP,true,false,false,false);
+		}
 		// load sections
 		for (int s = 0; s < coff.getNumSections(); s++) {
 			CoffSection section = coff.getSection(s);
@@ -307,8 +361,10 @@ public class UserProcess {
 			for (int i = 0; i < section.getLength(); i++) {
 				int vpn = section.getFirstVPN() + i;
 
-				// for now, just assume virtual addresses=physical addresses
-				section.loadPage(i, vpn);
+				int ppn=pageTable[vpn].ppn;
+				section.loadPage(i, ppn);
+				if(section.isReadOnly())
+					pageTable[vpn].readOnly=true;
 			}
 		}
 
@@ -319,6 +375,14 @@ public class UserProcess {
 	 * Release any resources allocated by <tt>loadSections()</tt>.
 	 */
 	protected void unloadSections() {
+
+		for(int i=0;i<pageTable.length;i++){
+			if(pageTable[i].valid){
+				UserKernel.freePage(pageTable[i].ppn);
+				pageTable[i].valid=false;
+			}
+		}
+		coff.close();
 	}
 
 	/**
@@ -524,7 +588,7 @@ public class UserProcess {
 	/**
 	 * Handle a syscall exception. Called by <tt>handleException()</tt>. The
 	 * <i>syscall</i> argument identifies which syscall the user executed:
-	 * 
+	 *
 	 * <table>
 	 * <tr>
 	 * <td>syscall#</td>
@@ -574,7 +638,7 @@ public class UserProcess {
 	 * <td><tt>int  unlink(char *name);</tt></td>
 	 * </tr>
 	 * </table>
-	 * 
+	 *
 	 * @param syscall the syscall number.
 	 * @param a0 the first syscall argument.
 	 * @param a1 the second syscall argument.
@@ -615,27 +679,27 @@ public class UserProcess {
 	 * Handle a user exception. Called by <tt>UserKernel.exceptionHandler()</tt>
 	 * . The <i>cause</i> argument identifies which exception occurred; see the
 	 * <tt>Processor.exceptionZZZ</tt> constants.
-	 * 
+	 *
 	 * @param cause the user exception that occurred.
 	 */
 	public void handleException(int cause) {
 		Processor processor = Machine.processor();
 
 		switch (cause) {
-		case Processor.exceptionSyscall:
-			int result = handleSyscall(processor.readRegister(Processor.regV0),
-					processor.readRegister(Processor.regA0),
-					processor.readRegister(Processor.regA1),
-					processor.readRegister(Processor.regA2),
-					processor.readRegister(Processor.regA3));
-			processor.writeRegister(Processor.regV0, result);
-			processor.advancePC();
-			break;
+			case Processor.exceptionSyscall:
+				int result = handleSyscall(processor.readRegister(Processor.regV0),
+						processor.readRegister(Processor.regA0),
+						processor.readRegister(Processor.regA1),
+						processor.readRegister(Processor.regA2),
+						processor.readRegister(Processor.regA3));
+				processor.writeRegister(Processor.regV0, result);
+				processor.advancePC();
+				break;
 
-		default:
-			Lib.debug(dbgProcess, "Unexpected exception: "
-					+ Processor.exceptionNames[cause]);
-			Lib.assertNotReached("Unexpected exception");
+			default:
+				Lib.debug(dbgProcess, "Unexpected exception: "
+						+ Processor.exceptionNames[cause]);
+				Lib.assertNotReached("Unexpected exception");
 		}
 	}
 
