@@ -157,7 +157,7 @@ public class StubFileSystem implements FileSystem {
 			try {
 				file.close();
 			}
-			catch (IOException e) {
+			  catch (IOException e) {
 			}
 		}
 

@@ -59,40 +59,6 @@ public class ThreadedKernel extends Kernel {
 	 * nothing.
 	 */
 	public void run() {
-/*		System.out.println("Tldsjfhsjldahflshfd");
-		KThread T1 = new KThread(new Runnable() {
-			@Override
-			public void run() {
-				for (int i = 0; i < 100; i++)
-					System.out.println("loop" + i + " @T1");
-//				currentThread.yield();
-			}
-		});
-		KThread T2 = new KThread(new Runnable() {
-			@Override
-			public void run() {
-				for (int i = 0; i < 100; i++)
-					System.out.println("loop" + i + " @T2");
-//				currentThread.yield();
-			}
-		});
-		KThread T3 = new KThread(new Runnable() {
-			@Override
-			public void run() {
-				for (int i = 0; i < 100; i++)
-					System.out.println("loop" + i + " @T3");
-//				currentThread.yield();
-			}
-		});
-
-		T1.setName("Thread1").fork();
-		T2.fork();
-		T3.fork();
-		int j = 0;
-		while (j < 50000)
-			j++;
-		//T1.join();*/
-
 	}
 
 	/**

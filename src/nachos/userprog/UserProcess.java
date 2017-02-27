@@ -37,6 +37,8 @@ public class UserProcess {
 		/** reserved for stdin and stdout(by requirement) */
 		openFileMap[0] = UserKernel.console.openForReading();
 		openFileMap[1] = UserKernel.console.openForWriting();
+		for (int i = 2; i < openFileMap.length; i++)
+			openFileMap[i] = null;
 	}
 
 	/**
@@ -346,12 +348,26 @@ public class UserProcess {
 	 *  help function for system calls
 	 */
 
-	protected boolean checkVirtualAddress(int vAddress) {
+	private boolean checkVirtualAddress(int vAddress) {
 		int locatedPage = Processor.pageFromAddress(vAddress);
 		if (locatedPage >= 0 && locatedPage < numPages)
 			return true;
 		else
 			return false;
+	}
+
+	/**
+	 * chec if the file descriptor is 2-15 and it is pointed to a file
+	 * @param fileDescriptor
+	 * @return
+	 */
+
+	private boolean checkFileDescriptor(int fileDescriptor) {
+		if (fileDescriptor >= openFileMap.length || fileDescriptor < 2)
+			return false;
+		if (openFileMap[fileDescriptor] == null)
+			return false;
+		return true;
 	}
 
 	/**
@@ -416,7 +432,7 @@ public class UserProcess {
 			return -1;
 		}
 
-		// get physical address for the desired file, "true" means "create"
+		// get physical address for the desired file, "true" means "open"
 		if ( (file = ThreadedKernel.fileSystem.open(filename, false)) == null )
 			return -1;
 
@@ -425,6 +441,79 @@ public class UserProcess {
 		openFileMap[fileDescriptor] = file;
 
 		return fileDescriptor;
+	}
+
+	/**
+	 * Read data by opened file descriptor
+	 * @param fileDescriptor
+	 * @param bufAddr address that we are going to stored read data
+	 * @param count
+	 * @return
+	 */
+
+	private int handleRead(int fileDescriptor, int bufAddr, int count) {
+		int byteHaveRead;
+		int byteHaveWritten;
+		byte tempBuffer[] = new byte[count];
+
+		if (!checkVirtualAddress(bufAddr))
+			return -1;
+
+		// the fileDescriptor should not be out of range (2-15)
+		if (!checkFileDescriptor(fileDescriptor))
+			return -1;
+
+		// read the data to tempBuffer in kernel first before putting into physical memory
+		if ( (byteHaveRead = openFileMap[fileDescriptor].read(tempBuffer, 0, count)) == -1)
+			return -1;
+
+		// put the read data that from file system, into physical memory where bufAddr represents
+		if ( (byteHaveWritten = writeVirtualMemory(bufAddr, tempBuffer, 0, byteHaveRead)) != byteHaveWritten)
+			return -1;
+
+		return byteHaveWritten;
+	}
+
+	private int handleWrite(int fileDescriptor, int bufAddr, int count) {
+		int byteHaveRead;
+		int bytesHaveWritten;
+		byte tempBuffer[] = new byte[count];
+		if (!checkVirtualAddress(bufAddr))
+			return -1;
+
+		// the fileDescriptor should not be out of range (2-15)
+		if (!checkFileDescriptor(fileDescriptor))
+			return -1;
+
+;		// may be read 0 byte, but that's fine, it's is not an error,
+		// Also, readVirtualMemory won't reutrn anything less than -1
+		byteHaveRead = readVirtualMemory(bufAddr, tempBuffer);
+
+		// if bytesHaveWritten is -1, then return -1, that is an error
+		bytesHaveWritten = openFileMap[fileDescriptor].write(tempBuffer, 0, byteHaveRead);
+
+		return bytesHaveWritten;
+	}
+
+	private int handleClose(int descriptor){
+		OpenFile file = openFileMap[descriptor];
+		if (file == null)
+			return -1;
+
+		file.close();
+		openFileMap[descriptor] = null;
+		availableDescriptors.add(descriptor);
+		return 0;
+	}
+
+	private int handleUnlink(int vAddr){
+		String filename = this.readVirtualMemoryString(vAddr,255);
+		if (filename == null)
+			return -1;
+		if (ThreadedKernel.fileSystem.remove(filename))
+			return 0;
+		else
+			return -1;
 	}
 
 	private static final int syscallHalt = 0, syscallExit = 1, syscallExec = 2,
@@ -495,15 +584,29 @@ public class UserProcess {
 	 */
 	public int handleSyscall(int syscall, int a0, int a1, int a2, int a3) {
 		switch (syscall) {
-		case syscallHalt:
-			return handleHalt();
-		case syscallCreate:
-			return handleCreat(a0);
-		case syscallOpen:
-			return handleOpen(a0);
-		default:
-			Lib.debug(dbgProcess, "Unknown syscall " + syscall);
-			Lib.assertNotReached("Unknown system call!");
+			case syscallHalt:
+				return handleHalt();
+			case syscallExit:
+				break;
+			case syscallExec:
+				break;
+			case syscallJoin:
+				break;
+			case syscallCreate:
+				return handleCreat(a0);
+			case syscallOpen:
+				return handleOpen(a0);
+			case syscallRead:
+				return handleRead(a0, a1, a2);
+			case syscallWrite:
+				return handleWrite(a0, a1, a2);
+			case syscallClose:
+				return handleClose(a0);
+			case syscallUnlink:
+				return handleUnlink(a0);
+			default:
+				Lib.debug(dbgProcess, "Unknown syscall " + syscall);
+				Lib.assertNotReached("Unknown system call!");
 		}
 		return 0;
 	}
