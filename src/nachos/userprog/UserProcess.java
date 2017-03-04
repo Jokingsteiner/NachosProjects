@@ -7,6 +7,7 @@ import nachos.userprog.*;
 import java.io.EOFException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 
 /**
  * Encapsulates the state of a user process that is not contained in its user
@@ -38,6 +39,16 @@ public class UserProcess {
 		openFileMap[1] = UserKernel.console.openForWriting();
 		for (int i = 2; i < openFileMap.length; i++)
 			openFileMap[i] = null;
+	}
+
+	private static class FileReference {
+		int numOfRef;
+		boolean deleted;
+
+		public FileReference() {
+			this.numOfRef = 0;
+			this.deleted = false;
+		}
 	}
 
 	/**
@@ -143,33 +154,14 @@ public class UserProcess {
 
 		byte[] memory = Machine.processor().getMemory();
 
-		// FIXME: not sure this is necessary or not
 		// for now, just assume that virtual addresses equal physical addresses
 		if (vaddr < 0 || vaddr >= memory.length)
 			return 0;
 
-		// To record the number of bytes successfully copied (or zero if no data could be copied).
-		int totalTransf = 0;
+		int amount = Math.min(length, memory.length - vaddr);
+		System.arraycopy(memory, vaddr, data, offset, amount);
 
-		while(length > 0 && offset < data.length){
-			int addr = vaddr%1024;
-			int virtualP = vaddr/1024;
-			if(virtualP >= pageTable.length || virtualP < 0)
-				break;
-			TranslationEntry pte=pageTable[virtualP];
-			if(!pte.valid) break;
-			pte.used=true;
-			int physicalP=pte.ppn;
-			int physicalAddr=physicalP*1024+addr;
-			int amount = Math.min(data.length-offset, Math.min(length, 1024-addr));
-			System.arraycopy(memory, physicalAddr, data, offset, amount);
-			vaddr+=amount;
-			offset+=amount;
-			length-=amount;
-			totalTransf+=amount;
-		}
-
-		return totalTransf;
+		return amount;
 	}
 
 	/**
@@ -204,33 +196,14 @@ public class UserProcess {
 
 		byte[] memory = Machine.processor().getMemory();
 
-		// FIXME: not sure this is necessary or not
 		// for now, just assume that virtual addresses equal physical addresses
 		if (vaddr < 0 || vaddr >= memory.length)
 			return 0;
 
-		int totalTransf = 0;
+		int amount = Math.min(length, memory.length - vaddr);
+		System.arraycopy(data, offset, memory, vaddr, amount);
 
-		while(length>0&&offset<data.length){
-			int addr=vaddr%1024;
-			int virtualP=vaddr/1024;
-			if(virtualP>=pageTable.length||virtualP<0)
-				break;
-			TranslationEntry pte=pageTable[virtualP];
-			if(!pte.valid||pte.readOnly) break;
-			pte.used=true;
-			pte.dirty=true;
-			int physicalP=pte.ppn;
-			int physicalAddr=physicalP*1024+addr;
-			int amount = Math.min(data.length-offset, Math.min(length, 1024-addr));
-			System.arraycopy(data, offset, memory, physicalAddr, amount);
-			vaddr+=amount;
-			offset+=amount;
-			length-=amount;
-			totalTransf+=amount;
-		}
-
-		return totalTransf;
+		return amount;
 	}
 
 	/**
@@ -334,23 +307,6 @@ public class UserProcess {
 			return false;
 		}
 
-		pageTable=new TranslationEntry[numPages];
-
-		for(int i=0;i<numPages;i++){
-			int physicalP=UserKernel.allocPage();
-			if(physicalP<0){
-				Lib.debug(dbgProcess, "\tunable to allocate pages");
-				for(int j=0;j<i;j++){
-					if(pageTable[j].valid){
-						UserKernel.freePage(pageTable[j].ppn);
-						pageTable[j].valid=false;
-					}
-				}
-				coff.close();
-				return false;
-			}
-			pageTable[i]=new TranslationEntry(i,physicalP,true,false,false,false);
-		}
 		// load sections
 		for (int s = 0; s < coff.getNumSections(); s++) {
 			CoffSection section = coff.getSection(s);
@@ -361,10 +317,8 @@ public class UserProcess {
 			for (int i = 0; i < section.getLength(); i++) {
 				int vpn = section.getFirstVPN() + i;
 
-				int ppn=pageTable[vpn].ppn;
-				section.loadPage(i, ppn);
-				if(section.isReadOnly())
-					pageTable[vpn].readOnly=true;
+				// for now, just assume virtual addresses=physical addresses
+				section.loadPage(i, vpn);
 			}
 		}
 
@@ -375,14 +329,6 @@ public class UserProcess {
 	 * Release any resources allocated by <tt>loadSections()</tt>.
 	 */
 	protected void unloadSections() {
-
-		for(int i=0;i<pageTable.length;i++){
-			if(pageTable[i].valid){
-				UserKernel.freePage(pageTable[i].ppn);
-				pageTable[i].valid=false;
-			}
-		}
-		coff.close();
 	}
 
 	/**
@@ -427,11 +373,133 @@ public class UserProcess {
 	 */
 
 	private boolean checkFileDescriptor(int fileDescriptor) {
-		if (fileDescriptor >= openFileMap.length || fileDescriptor < 2)
+		// accept 0 and 1, that is for stdin and stdout
+		if (fileDescriptor >= openFileMap.length || fileDescriptor < 0)
 			return false;
 		if (openFileMap[fileDescriptor] == null)
 			return false;
 		return true;
+	}
+
+	/**
+	 * increase reference count for a file(by filename)
+	 * @param filename
+	 * @return
+	 */
+
+	private static boolean refFile(String filename) {
+		fileRefLock.acquire();
+		FileReference ref = fileRefMap.get(filename);
+		if (ref == null) {
+			ref = new FileReference();
+			fileRefMap.put(filename, ref);
+		}
+
+		if (!ref.deleted) {
+			ref.numOfRef++;
+			fileRefLock.release();
+			return true;
+		}
+		else {	// cannot reference
+			fileRefLock.release();
+			return false;
+		}
+	}
+
+	/**
+	 * Unreference file, if this is the last reference, check if we need delete it or not
+	 * @param filename
+	 * @return false: 1. cannot find the reference in the map. OR 2. delete from file system failed
+	 * 			true: 1. only unref, OR 2. delete from file system failed succeed
+	 */
+
+	private static boolean unRefFile(String filename) {
+		fileRefLock.acquire();
+		boolean ret = true;
+		FileReference ref = fileRefMap.get(filename);
+		if (ref == null || ref.numOfRef <= 0) {                    // it is impossible
+			fileRefLock.release();
+			return false;
+		}
+		ref.numOfRef--;
+
+		if (ref.numOfRef <= 0) {
+			// delete the file if it has been marked as deleted,if not just un-reference the last reference
+			if (ref.deleted == true) {
+				ret = UserKernel.fileSystem.remove(filename);
+				// TODO: think about leaving the filename in the map if remove() failed
+				fileRefMap.remove(filename);
+			}
+		}
+
+		fileRefLock.release();
+		// including both case (only unref/need delete)
+		return ret;
+	}
+
+	/**
+	 * unlink(delete) the file if no processes have the file open, otherwise just mark deleted flag
+	 * @param filename
+	 * @return
+	 */
+
+	private static boolean unLinkFile(String filename) {
+		fileRefLock.acquire();
+		boolean ret = true;
+		FileReference ref = fileRefMap.get(filename);
+		if (ref == null) {                    // you can't unlink a file which is not even opened
+			fileRefLock.release();
+			return false;
+		}
+
+		// because we marked the deleted as true here, even we can't unlink right now,
+		// unRefFile() will be called when handleClose() so this file will be delete at that time
+		ref.deleted = true;
+		// only unlink if no processes have the file open, otherwise just mark deleted flag
+		if (ref.numOfRef <= 0) {
+			ret = UserKernel.fileSystem.remove(filename);
+			// TODO: think about leaving the filename in the map if remove() failed
+			fileRefMap.remove(filename);
+		}
+
+		fileRefLock.release();
+		return ret;
+	}
+
+	private int creatOrOpenFile(int vAddr, boolean createFlag) {
+		String filename;
+		OpenFile file;
+
+		if (!checkVirtualAddress(vAddr))
+			return -1;
+
+		// in the requirement, the passed in vAddr from user program is defined up to 255
+		if ( (filename = this.readVirtualMemoryString(vAddr, 255)) == null )
+			return -1;
+
+		// a process should maintain up to 16 open filed at same time,
+		// 0 for stdin and 1 for stdout. Thus, we have 14 available descriptor for opening/creating file
+		if (availableDescriptors.size() < 1) {
+			return -1;
+		}
+
+		// try to add reference to this file
+		if (!refFile(filename))
+			// fail to increase reference because that the deleted flag is set.
+			return -1;
+
+		// get physical address for the desired file, "true" means "create", "false" means "open"
+		if ( (file = ThreadedKernel.fileSystem.open(filename, createFlag)) == null ) {
+			// remove the previously reference since we failed to open the file
+			unRefFile(filename);
+			return -1;
+		}
+
+		// get next available file descriptor
+		Integer fileDescriptor = availableDescriptors.remove(0);
+		openFileMap[fileDescriptor] = file;
+
+		return fileDescriptor;
 	}
 
 	/**
@@ -445,66 +513,12 @@ public class UserProcess {
 		return 0;
 	}
 
-	/**
-	 *
-	 * @param vAddr in memory system, the address is use
-	 * @return
-	 */
-
 	private int handleCreat(int vAddr) {
-		String filename;
-		OpenFile file;
-
-		if (!checkVirtualAddress(vAddr))
-			return -1;
-
-		// in the requirement, the passed in vAddr from user program is defined up to 255
-		if ( (filename = this.readVirtualMemoryString(vAddr, 255)) == null )
-			return -1;
-
-		// a process should maintain up to 16 open filed at same time,
-		// 0 for stdin and 1 for stdout. Thus, we have 14 available descriptor for opening/creating file
-		if (availableDescriptors.size() < 1) {
-			return -1;
-		}
-
-		// get physical address for the desired file, "true" means "create"
-		if ( (file = ThreadedKernel.fileSystem.open(filename, true)) == null )
-			return -1;
-
-		// get next available file descriptor
-		Integer fileDescriptor = availableDescriptors.remove(0);
-		openFileMap[fileDescriptor] = file;
-
-		return fileDescriptor;
+		return creatOrOpenFile(vAddr, true);
 	}
 
 	private int handleOpen(int vAddr) {
-		String filename;
-		OpenFile file;
-
-		if (!checkVirtualAddress(vAddr))
-			return -1;
-
-		// in the requirement, the passed in vAddr from user program is defined up to 255
-		if ( (filename = this.readVirtualMemoryString(vAddr, 255)) == null )
-			return -1;
-
-		// a process should maintain up to 16 open filed at same time,
-		// 0 for stdin and 1 for stdout. Thus, we have 14 available descriptor for opening/creating file
-		if (availableDescriptors.size() < 1) {
-			return -1;
-		}
-
-		// get physical address for the desired file, "true" means "open"
-		if ( (file = ThreadedKernel.fileSystem.open(filename, false)) == null )
-			return -1;
-
-		// get next available file descriptor
-		Integer fileDescriptor = availableDescriptors.remove(0);
-		openFileMap[fileDescriptor] = file;
-
-		return fileDescriptor;
+		return creatOrOpenFile(vAddr, false);
 	}
 
 	/**
@@ -545,11 +559,11 @@ public class UserProcess {
 		if (!checkVirtualAddress(bufAddr))
 			return -1;
 
-		// the fileDescriptor should not be out of range (2-15)
+		// the fileDescriptor should not be out of range (0-15), 0 is stdin and 1 is stdout
 		if (!checkFileDescriptor(fileDescriptor))
 			return -1;
 
-;		// may be read 0 byte, but that's fine, it's is not an error,
+		// may be read 0 byte, but that's fine, it's is not an error,
 		// Also, readVirtualMemory won't reutrn anything less than -1
 		byteHaveRead = readVirtualMemory(bufAddr, tempBuffer);
 
@@ -560,24 +574,39 @@ public class UserProcess {
 	}
 
 	private int handleClose(int descriptor){
+		if (!checkFileDescriptor(descriptor))
+			return -1;
+
 		OpenFile file = openFileMap[descriptor];
 		if (file == null)
 			return -1;
 
+
+		String filename = file.getName();
 		file.close();
 		openFileMap[descriptor] = null;
 		availableDescriptors.add(descriptor);
-		return 0;
+
+		// un-reference once we closed a file, it will check if this is the last one and should be deleted
+		if (!unRefFile(filename))
+			return -1;
+		else
+			return 0;
 	}
 
 	private int handleUnlink(int vAddr){
+		if (!checkVirtualAddress(vAddr))
+			return -1;
+
 		String filename = this.readVirtualMemoryString(vAddr,255);
 		if (filename == null)
 			return -1;
-		if (ThreadedKernel.fileSystem.remove(filename))
-			return 0;
-		else
+
+
+		if (!unLinkFile(filename))
 			return -1;
+		else
+			return 0;
 	}
 
 	private static final int syscallHalt = 0, syscallExit = 1, syscallExec = 2,
@@ -728,5 +757,9 @@ public class UserProcess {
 
 	/** Map file descriptor to open file. */
 	OpenFile openFileMap[] = new OpenFile[16];
+
+	/** Global file reference and lock */
+	private static HashMap<String, FileReference> fileRefMap = new HashMap<String, FileReference> ();
+	private static Lock fileRefLock = new Lock();
 
 }
