@@ -397,7 +397,9 @@ public class UserProcess {
 
 		if (!ref.deleted) {
 			ref.numOfRef++;
-			fileRefLock.release();
+			// TODO: remove me
+            System.out.println("This file has " + ref.numOfRef + " references");
+            fileRefLock.release();
 			return true;
 		}
 		else {	// cannot reference
@@ -414,22 +416,35 @@ public class UserProcess {
 	 */
 
 	private static boolean unRefFile(String filename) {
-		fileRefLock.acquire();
+        fileRefLock.acquire();
 		boolean ret = true;
 		FileReference ref = fileRefMap.get(filename);
+        // TODO: remove me
+        if (ref == null)
+            System.out.println("Nachos: error in unRefFile, ref == null");
+        else if (ref.numOfRef <= 0)
+            System.out.println("Nachos: error in unRefFile, ref.numOfRef <= 0");
+
+
 		if (ref == null || ref.numOfRef <= 0) {                    // it is impossible
+
 			fileRefLock.release();
 			return false;
 		}
 		ref.numOfRef--;
-
-		if (ref.numOfRef <= 0) {
+        System.out.println("Nachos: Still have " + ref.numOfRef + " references" + ", file deleted status is " + ref.deleted);
+        if (ref.numOfRef <= 0) {
 			// delete the file if it has been marked as deleted,if not just un-reference the last reference
 			if (ref.deleted == true) {
 				ret = UserKernel.fileSystem.remove(filename);
 				// TODO: think about leaving the filename in the map if remove() failed
 				fileRefMap.remove(filename);
-			}
+				// TODO: remove me
+				if (ret)
+                    System.out.println("Nachos: delete file because last ref removed");
+				else
+                    System.out.println("Nachos: delete failed!");
+            }
 		}
 
 		fileRefLock.release();
@@ -440,7 +455,8 @@ public class UserProcess {
 	/**
 	 * unlink(delete) the file if no processes have the file open, otherwise just mark deleted flag
 	 * @param filename
-	 * @return
+	 * @return false: 1. cannot find file in the map 2. still open by some file, cannot delete, 3. delete successfully
+     *          true:
 	 */
 
 	private static boolean unLinkFile(String filename) {
@@ -460,10 +476,17 @@ public class UserProcess {
 			ret = UserKernel.fileSystem.remove(filename);
 			// TODO: think about leaving the filename in the map if remove() failed
 			fileRefMap.remove(filename);
+            // TODO: remove me
+			if (ret)
+                System.out.println("Nachos: delete done!");
+			else
+                System.out.println("Nachos: delete failed!");
 		}
-
-		fileRefLock.release();
-		return ret;
+        // TODO: remove me
+		if (ref.numOfRef > 0 )
+            System.out.println("Nachos: still be opened");
+        fileRefLock.release();
+        return ret;
 	}
 
 	private int creatOrOpenFile(int vAddr, boolean createFlag) {

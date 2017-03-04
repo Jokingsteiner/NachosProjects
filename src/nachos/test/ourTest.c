@@ -2,202 +2,105 @@
 #include "stdio.h"
 #include "stdlib.h"
 
-#define BUFSIZE 1024
-#define BIG 4096
 
-char buf[BUFSIZE], buf2[BUFSIZE], buf3[BUFSIZE], bigBuf[BIG], bigBuf1[BIG];
+int testCreate16(){
+  // file lost, but already tested creating 16+ files
+  // also fix bug in printf
+  // BUT SCANF doesn't work
+  char temp[10];
+  //scanf("%9s", temp);
+  //printf("%s\n", temp);
+  int *testFd = null;
+  printf("%d\n", testFd);
+  printf("close() return %d\n", close(*testFd));
+  return 0;
+}
 
-char *cpargv[20]= {"me2.txt","me2copy.txt"}; //Todo (FC): Make syntax correct
+int testCreatWrite() {
+  int fd1, fd2;
+  if ( (fd1 = creat("AAATestResult.txt")) == -1) {
+    //printf("Unable to open %s\n", argv[1]);
+    return -1;
+  }
 
+    if ( (fd2 = creat("BBBTestResult.txt")) == -1) {
+    //printf("Unable to open %s\n", argv[1]);
+    return -1;
+  }
 
-int main(void)
+  char writeText[] = "File Created\n";
+  write(fd1, writeText, strlen(writeText));
+  // test for oversize writting (write 20 bytes but we don't have 20 bytes string)
+  char temp[20] = "                   "; //19 spaces
+  sprintf (temp, "sizeof=%d\n", sizeof(writeText));
+  write(fd1, temp, sizeof(temp));
+  sprintf (temp, "strlen=%d\n", strlen(writeText));
+  write(fd1, temp, sizeof(temp));
+  close(fd1);
+  close(fd2);
+
+}
+
+int tesetRead() {
+  int fd2, fd3;
+  if ( (fd2 = creat("BBBTestResult.txt")) == -1) {
+    return -1;
+  }
+  char buf[2000];
+  if ( (fd3 = open("bad_url.txt")) == -1) {
+    return -1;
+  }
+  else {
+    read(fd3, buf, sizeof(buf));
+    write(fd2, buf, sizeof(buf));
+  }
+
+  close(fd2);
+  close(fd3);
+
+  // test if we read something not open
+  /*
+  int error = read(fd2, buf, sizeof(buf));
+  if (error == -1)
+    creat("-1.txt");
+  */
+}
+
+int testUnlink() {
+  int fd1, fd2, fd3;
+  if ( (fd1 = open("unlinkTest.txt")) == -1) {
+    return -1;
+  }
+  if ( (fd2 = open("unlinkTest.txt")) == -1) {
+    return -1;
+  }
+  if ( (fd3 = open("unlinkTest.txt")) == -1) {
+    return -1;
+  }
+
+  unlink("unlinkTest.txt");
+  close(fd1);
+  close(fd2);
+  close(fd3);
+}
+
+int main(int argc, char** argv)
 {
-	//Test to see that file descriptors can be successfully reused
-	//Also tests creat, unlink, and close
-    int i, fileDescr, status, stdClose;
-    for (i = 0; i < 17; i++) {
-        fileDescr = creat("me.txt");
-        if (fileDescr == -1) {
-            printf("Error: bad file descriptor on iteration %d", i);
-            return 1;
-        }
-        close(fileDescr);
-        unlink("me.txt");
-    }
-	//test reads and writes to a file
-	fileDescr = creat("me2.txt");
-	if (fileDescr == -1) {
-		printf("Error: could not make a file");
-		return 1;
-	}
+    //test what is argc
+  /*
+  char temp[10];
+  sprintf (temp, "%d.txt", argc);
+  open(temp);
+  */
+  /*
+  if (argc != 2) {
+    //printf("Usage: Require One Argument <file>\n");
+    creat("Error.txt");
+    return 1;
+  }
+  */
+  //testUnlink();
+  testCreate16();
 
-	for (i = 0; i < 26; i++) {
-		buf[i] = 'a' + i;
-	}
-
-	status = write(fileDescr,buf,26);
-
-	if (status == -1) {
-		printf("Error: could not write a file");
-		return 1;
-	}
-
-	//read the data back
-	status = read(fileDescr, buf2, 26);
-
-	if (status == -1) {
-		printf("Error: unable to read data back from a file");
-		return 1;
-	}
-
-	//close the file, and verify that we read back the correct data
-	status = close(fileDescr);
-	
-	if (status == -1) {
-		printf("Error: unable to close the file");
-		return 1;
-	}
-
-    //FC. COFF Check that exec is paging code properly
-	exec("../test/cp", 2, cpargv);
-
-	//FC.reopen the file's copy
-    fileDescr = open("me2copy.txt");
-    if (fileDescr == -1) {
-        printf("Error: unable to reopen the file me2copy.txt. Exec('cp') did not work");
-        return 1;
-    }
-   
-    status = read(fileDescr,buf3,26);
-
-    if (status == -1) {
-        printf("Error: unable to reread the file me2copy.txt");
-        return 1;
-    }
-
-    //FC.verify that me2copy has the correct data
-    for (i=0; i < 26; i++) {
-        if (buf3[i] != 'a' + i) {
-            printf("Error: bad value reread back to me2copy.txt. Exec('cp') did not work.");
-            return 1;
-        }
-    }
-
-	//FC.close the file and test that it stays closed
-	status = unlink("me2copy.txt");//mark it for deletion
-
-	//reopen the file
-	fileDescr = open("me2.txt");
-	if (fileDescr == -1) {
-		printf("Error: unable to reopen the file");
-		return 1;
-	}
-	
-	status = read(fileDescr,buf3,26);
-
-	if (status == -1) {
-		printf("Error: unable to reread the file");
-		return 1;
-	}
-
-	//verify that it read the correct data
-	for (i=0; i < 26; i++) {
-		if (buf3[i] != 'a' + i) {
-			printf("Error: bad value reread back");
-			return 1;
-		}
-	}
-
-	//close the file and test that it stays closed
-	status = unlink("me2.txt");//mark it for deletion
-
-	if (status == -1) {
-		printf("Error: could not unlink me2.txt");
-		return 1;
-	}
-	//test that it is not yet deleted
-	status = read(fileDescr,buf2,26);
-	
-	if (status == -1) {
-		printf("Error: unlink deleted a file early while others still accessing");
-		return 1;
-	}
-
-	//now actually delete the file by closing it
-	status = close(fileDescr);
-	
-	if (status == -1) {
-		printf("Error: tried to close file while it was last one with it open");
-		return 1;
-	}
-
-	//it should now be closed, so open should fail
-	fileDescr = open("me2.txt");//this should not create the file
-
-	if (fileDescr != -1) {
-		printf("Error: open syscall created a file we deleted");
-		return 1;
-	}
-
-	//Testing big reads and writes to see if they fail or not
-	//Initialize data first
-	for (i = 0; i < BIG; i++)
-		bigBuf[i] = 'a' + (i^2);
-
-	//open a file and write this randomness to it
-	fileDescr = creat("bigFileTest.txt");
-	if (fileDescr == -1) {
-		printf("Error: unable to open file for big io test");
-		return 1;
-	}
-
-	status = write(fileDescr,bigBuf, BIG);
-
-	if (status == -1) {
-		printf("Error: unable to write big data");
-		return 1;
-	}
-      
-	//read the data back and verify
-	close(fileDescr);
-	fileDescr = open("bigFileTest.txt");
-	if (fileDescr == -1) {
-	  printf("Error: unable to reopen file for big io test");
-	}
-
-	status = read(fileDescr,bigBuf1, BIG);
-
-	if (status == -1) {
-		printf("Error: unable to read back big data");
-		return 1;
-	}
-
-	for (i = 0; i < BIG; i++) {
-		if (bigBuf[i] != bigBuf1[i]) {
-			printf("Error: did not read back the expected data");
-			return 1;
-		}
-	}
-
-	unlink("bigFileTest.txt");
-	close(fileDescr);	
-
-	printf("Tests successful!");
-	//Test to see that stdin and stdout are able to close successfully
-	//These must go at the end, probably
-	stdClose = close(0);
-	if (stdClose == -1) {
-		printf("Error: could not close stdin");
-		return 1;
-	}
-
-	stdClose = close(1);
-	if (stdClose == -1) {
-		printf("Error: could not close stdout");
-		return 1;
-	}
-
-	printf("Success: All Tests Pass | Huzzahs all around!");
-
-    return 0;
+  return 0;
 }
