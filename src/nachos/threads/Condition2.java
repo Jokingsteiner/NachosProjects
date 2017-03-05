@@ -2,25 +2,29 @@ package nachos.threads;
 
 import nachos.machine.*;
 
+import java.util.LinkedList;
+import java.util.List;
+
 /**
  * An implementation of condition variables that disables interrupt()s for
  * synchronization.
- * 
+ *
  * <p>
  * You must implement this.
- * 
+ *
  * @see nachos.threads.Condition
  */
 public class Condition2 {
 	/**
 	 * Allocate a new condition variable.
-	 * 
+	 *
 	 * @param conditionLock the lock associated with this condition variable.
 	 * The current thread must hold this lock whenever it uses <tt>sleep()</tt>,
 	 * <tt>wake()</tt>, or <tt>wakeAll()</tt>.
 	 */
 	public Condition2(Lock conditionLock) {
 		this.conditionLock = conditionLock;
+		waitForCondQueue = new LinkedList<KThread>();
 	}
 
 	/**
@@ -32,9 +36,12 @@ public class Condition2 {
 	public void sleep() {
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
 
+		boolean intStatus = Machine.interrupt().disable();
+		waitForCondQueue.add(KThread.currentThread());
 		conditionLock.release();
-
+		KThread.sleep();
 		conditionLock.acquire();
+		Machine.interrupt().restore(intStatus);
 	}
 
 	/**
@@ -43,6 +50,12 @@ public class Condition2 {
 	 */
 	public void wake() {
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
+
+		if (!waitForCondQueue.isEmpty()) {
+			boolean intStatus = Machine.interrupt().disable();
+			waitForCondQueue.removeFirst().ready();
+			Machine.interrupt().restore(intStatus);
+		}
 	}
 
 	/**
@@ -51,7 +64,15 @@ public class Condition2 {
 	 */
 	public void wakeAll() {
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
+
+		while (!waitForCondQueue.isEmpty())
+			wake();
 	}
 
 	private Lock conditionLock;
+
+	private LinkedList<KThread> waitForCondQueue;
+//	we should not use system queue, it will be get by nextReadQueue() in spite of waiting on conditional variables
+//	private ThreadQueue waitQueue = ThreadedKernel.scheduler
+//			.newThreadQueue(false);
 }

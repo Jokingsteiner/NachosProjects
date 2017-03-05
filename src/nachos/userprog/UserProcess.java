@@ -73,8 +73,8 @@ public class UserProcess {
 	public boolean execute(String name, String[] args) {
 		if (!load(name, args))
 			return false;
-
-		new UThread(this).setName(name).fork();
+        thread = new UThread(this);
+		thread.setName(name).fork();
 
 		return true;
 	}
@@ -259,7 +259,7 @@ public class UserProcess {
 
 		OpenFile executable = ThreadedKernel.fileSystem.open(name, false);
 		if (executable == null) {
-			Lib.debug(dbgProcess, "\topen failed");
+            Lib.debug(dbgProcess, "\topen failed");
 			return false;
 		}
 
@@ -463,7 +463,7 @@ public class UserProcess {
 		if (!ref.deleted) {
 			ref.numOfRef++;
 			// TODO: remove me
-			System.out.println("This file has " + ref.numOfRef + " references");
+//			System.out.println("This file has " + ref.numOfRef + " references");
 			fileRefLock.release();
 			return true;
 		}
@@ -485,10 +485,10 @@ public class UserProcess {
 		boolean ret = true;
 		FileReference ref = fileRefMap.get(filename);
 		// TODO: remove me
-		if (ref == null)
+/*		if (ref == null)
 			System.out.println("Nachos: error in unRefFile, ref == null");
 		else if (ref.numOfRef <= 0)
-			System.out.println("Nachos: error in unRefFile, ref.numOfRef <= 0");
+			System.out.println("Nachos: error in unRefFile, ref.numOfRef <= 0");*/
 
 
 		if (ref == null || ref.numOfRef <= 0) {                    // it is impossible
@@ -497,7 +497,8 @@ public class UserProcess {
 			return false;
 		}
 		ref.numOfRef--;
-		System.out.println("Nachos: Still have " + ref.numOfRef + " references" + ", file deleted status is " + ref.deleted);
+        // TODO: remove me
+		//System.out.println("Nachos: Still have " + ref.numOfRef + " references" + ", file deleted status is " + ref.deleted);
 		if (ref.numOfRef <= 0) {
 			// delete the file if it has been marked as deleted,if not just un-reference the last reference
 			if (ref.deleted == true) {
@@ -505,10 +506,10 @@ public class UserProcess {
 				// TODO: think about leaving the filename in the map if remove() failed
 				fileRefMap.remove(filename);
 				// TODO: remove me
-				if (ret)
+/*				if (ret)
 					System.out.println("Nachos: delete file because last ref removed");
 				else
-					System.out.println("Nachos: delete failed!");
+					System.out.println("Nachos: delete failed!");*/
 			}
 		}
 
@@ -542,14 +543,14 @@ public class UserProcess {
 			// TODO: think about leaving the filename in the map if remove() failed
 			fileRefMap.remove(filename);
 			// TODO: remove me
-			if (ret)
+/*			if (ret)
 				System.out.println("Nachos: delete done!");
 			else
-				System.out.println("Nachos: delete failed!");
+				System.out.println("Nachos: delete failed!");*/
 		}
 		// TODO: remove me
-		if (ref.numOfRef > 0 )
-			System.out.println("Nachos: still be opened");
+/*		if (ref.numOfRef > 0 )
+			System.out.println("Nachos: still be opened");*/
 		fileRefLock.release();
 		return ret;
 	}
@@ -606,7 +607,7 @@ public class UserProcess {
 		Lib.debug(dbgProcess, "handleExit()");
 
 		//close files
-		for (int i=0; i!=16; ++i){
+		for (int i=2; i!=16; ++i){
 			if (openFileMap[i]!=null){
 				handleClose(i);
 			}
@@ -637,18 +638,24 @@ public class UserProcess {
 	}
 
 	private int handleExec(int file, int argc, int argv){
-		if(argv<0 || argc<1 || file<0)
-			return -1;
+		if(argv<0 || argc<1 || file<0) {
+            System.out.println("Nachos: Exec: Input Arg Error");
+            return -1;
+        }
+
+
 		String fName=readVirtualMemoryString(file,255);
 
-		if(fName==null)
-			return -1;
+		if(fName==null) {
+            System.out.println("Nachos: Exec: Filename is null");
+            return -1;
+        }
 
 		//check filename extension = .coff?
-		String suffix = fName.toLowerCase().substring(fName.length()-4);
+		String suffix = fName.toLowerCase().substring(fName.length()-5);
 
 		if (!".coff".equals(suffix)){
-			return -1;
+            return -1;
 		}
 
 		String args[]=new String[argc];
@@ -658,13 +665,20 @@ public class UserProcess {
 		byte temp[]=new byte[4];
 
 		for(int i=0;i<argc;i++){
-			if(readVirtualMemory(argv+i*4,temp)!=4)
-				return -1;
-			arg=Lib.bytesToInt(temp,0);
+			if(readVirtualMemory(argv + i * 4,temp)!= 4) {
+                System.out.println("Nachos: Exec: readVirtualMemory failed");
+                return -1;
+            }
+			arg = Lib.bytesToInt(temp,0);
 
-			if((args[i]=readVirtualMemoryString(arg,255))==null)
-				return -1;
-		}
+			if( (args[i] = readVirtualMemoryString(arg,255)) == null ) {
+                System.out.println("Nachos: Exec: readVirtualMemoryString failed");
+                return -1;
+            }
+
+            if (i < 8)
+                System.out.println("Nachos: args[i] is " + args[i]);
+        }
 
 		UserProcess child=UserProcess.newUserProcess();
 		child.parentid=this.pid;
@@ -673,8 +687,8 @@ public class UserProcess {
 			children.put(child.pid,child);
 			return child.pid;
 		}
-
-		return -1;
+        System.out.println("Nachos: Exec: Chlid Exec failed");
+        return -1;
 	}
 
 	private int handleJoin(int pid, int status){
@@ -688,8 +702,8 @@ public class UserProcess {
 		else
 			return -1;
 
-		child.thread.join();
-		children.remove(pid);
+        child.thread.join();
+        children.remove(pid);
 
 		byte stats[]=new byte[4];
 		stats=Lib.bytesFromInt(child.exitStatus);
@@ -908,7 +922,6 @@ public class UserProcess {
 	 */
 	public void handleException(int cause) {
 		Processor processor = Machine.processor();
-
 		switch (cause) {
 			case Processor.exceptionSyscall:
 				int result = handleSyscall(processor.readRegister(Processor.regV0),
@@ -921,9 +934,10 @@ public class UserProcess {
 				break;
 
 			default:
-				Lib.debug(dbgProcess, "Unexpected exception: "
+                Lib.debug(dbgProcess, "Unexpected exception: "
 						+ Processor.exceptionNames[cause]);
-				Lib.assertNotReached("Unexpected exception");
+                handleExit(-1);
+                Lib.assertNotReached("Unexpected exception");
 		}
 	}
 
