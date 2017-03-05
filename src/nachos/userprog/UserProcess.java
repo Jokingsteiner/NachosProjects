@@ -2,7 +2,6 @@ package nachos.userprog;
 
 import nachos.machine.*;
 import nachos.threads.*;
-import nachos.userprog.*;
 
 import java.io.EOFException;
 import java.util.ArrayList;
@@ -39,8 +38,10 @@ public class UserProcess {
 		openFileMap[1] = UserKernel.console.openForWriting();
 		for (int i = 2; i < openFileMap.length; i++)
 			openFileMap[i] = null;
+		pid = processCount++;
+		children = new HashMap<Integer,UserProcess>();
+		exitStatus = 1;
 	}
-
 	private static class FileReference {
 		int numOfRef;
 		boolean deleted;
@@ -50,7 +51,6 @@ public class UserProcess {
 			this.deleted = false;
 		}
 	}
-
 	/**
 	 * Allocate and return a new process of the correct class. The class name is
 	 * specified by the <tt>nachos.conf</tt> key
@@ -154,14 +154,33 @@ public class UserProcess {
 
 		byte[] memory = Machine.processor().getMemory();
 
+		// FIXME: not sure this is necessary or not
 		// for now, just assume that virtual addresses equal physical addresses
 		if (vaddr < 0 || vaddr >= memory.length)
 			return 0;
 
-		int amount = Math.min(length, memory.length - vaddr);
-		System.arraycopy(memory, vaddr, data, offset, amount);
+		// To record the number of bytes successfully copied (or zero if no data could be copied).
+		int totalTransf = 0;
 
-		return amount;
+		while(length > 0 && offset < data.length){
+			int addr = vaddr%1024;
+			int virtualP = vaddr/1024;
+			if(virtualP >= pageTable.length || virtualP < 0)
+				break;
+			TranslationEntry pte=pageTable[virtualP];
+			if(!pte.valid) break;
+			pte.used=true;
+			int physicalP=pte.ppn;
+			int physicalAddr=physicalP*1024+addr;
+			int amount = Math.min(data.length-offset, Math.min(length, 1024-addr));
+			System.arraycopy(memory, physicalAddr, data, offset, amount);
+			vaddr+=amount;
+			offset+=amount;
+			length-=amount;
+			totalTransf+=amount;
+		}
+
+		return totalTransf;
 	}
 
 	/**
@@ -196,14 +215,33 @@ public class UserProcess {
 
 		byte[] memory = Machine.processor().getMemory();
 
+		// FIXME: not sure this is necessary or not
 		// for now, just assume that virtual addresses equal physical addresses
 		if (vaddr < 0 || vaddr >= memory.length)
 			return 0;
 
-		int amount = Math.min(length, memory.length - vaddr);
-		System.arraycopy(data, offset, memory, vaddr, amount);
+		int totalTransf = 0;
 
-		return amount;
+		while(length>0&&offset<data.length){
+			int addr=vaddr%1024;
+			int virtualP=vaddr/1024;
+			if(virtualP>=pageTable.length||virtualP<0)
+				break;
+			TranslationEntry pte=pageTable[virtualP];
+			if(!pte.valid||pte.readOnly) break;
+			pte.used=true;
+			pte.dirty=true;
+			int physicalP=pte.ppn;
+			int physicalAddr=physicalP*1024+addr;
+			int amount = Math.min(data.length-offset, Math.min(length, 1024-addr));
+			System.arraycopy(data, offset, memory, physicalAddr, amount);
+			vaddr+=amount;
+			offset+=amount;
+			length-=amount;
+			totalTransf+=amount;
+		}
+
+		return totalTransf;
 	}
 
 	/**
@@ -307,6 +345,23 @@ public class UserProcess {
 			return false;
 		}
 
+		pageTable=new TranslationEntry[numPages];
+
+		for(int i=0;i<numPages;i++){
+			int physicalP=UserKernel.allocPage();
+			if(physicalP<0){
+				Lib.debug(dbgProcess, "\tunable to allocate pages");
+				for(int j=0;j<i;j++){
+					if(pageTable[j].valid){
+						UserKernel.freePage(pageTable[j].ppn);
+						pageTable[j].valid=false;
+					}
+				}
+				coff.close();
+				return false;
+			}
+			pageTable[i]=new TranslationEntry(i,physicalP,true,false,false,false);
+		}
 		// load sections
 		for (int s = 0; s < coff.getNumSections(); s++) {
 			CoffSection section = coff.getSection(s);
@@ -317,8 +372,10 @@ public class UserProcess {
 			for (int i = 0; i < section.getLength(); i++) {
 				int vpn = section.getFirstVPN() + i;
 
-				// for now, just assume virtual addresses=physical addresses
-				section.loadPage(i, vpn);
+				int ppn=pageTable[vpn].ppn;
+				section.loadPage(i, ppn);
+				if(section.isReadOnly())
+					pageTable[vpn].readOnly=true;
 			}
 		}
 
@@ -329,6 +386,14 @@ public class UserProcess {
 	 * Release any resources allocated by <tt>loadSections()</tt>.
 	 */
 	protected void unloadSections() {
+
+		for(int i=0;i<pageTable.length;i++){
+			if(pageTable[i].valid){
+				UserKernel.freePage(pageTable[i].ppn);
+				pageTable[i].valid=false;
+			}
+		}
+		coff.close();
 	}
 
 	/**
@@ -398,8 +463,8 @@ public class UserProcess {
 		if (!ref.deleted) {
 			ref.numOfRef++;
 			// TODO: remove me
-            System.out.println("This file has " + ref.numOfRef + " references");
-            fileRefLock.release();
+			System.out.println("This file has " + ref.numOfRef + " references");
+			fileRefLock.release();
 			return true;
 		}
 		else {	// cannot reference
@@ -416,14 +481,14 @@ public class UserProcess {
 	 */
 
 	private static boolean unRefFile(String filename) {
-        fileRefLock.acquire();
+		fileRefLock.acquire();
 		boolean ret = true;
 		FileReference ref = fileRefMap.get(filename);
-        // TODO: remove me
-        if (ref == null)
-            System.out.println("Nachos: error in unRefFile, ref == null");
-        else if (ref.numOfRef <= 0)
-            System.out.println("Nachos: error in unRefFile, ref.numOfRef <= 0");
+		// TODO: remove me
+		if (ref == null)
+			System.out.println("Nachos: error in unRefFile, ref == null");
+		else if (ref.numOfRef <= 0)
+			System.out.println("Nachos: error in unRefFile, ref.numOfRef <= 0");
 
 
 		if (ref == null || ref.numOfRef <= 0) {                    // it is impossible
@@ -432,8 +497,8 @@ public class UserProcess {
 			return false;
 		}
 		ref.numOfRef--;
-        System.out.println("Nachos: Still have " + ref.numOfRef + " references" + ", file deleted status is " + ref.deleted);
-        if (ref.numOfRef <= 0) {
+		System.out.println("Nachos: Still have " + ref.numOfRef + " references" + ", file deleted status is " + ref.deleted);
+		if (ref.numOfRef <= 0) {
 			// delete the file if it has been marked as deleted,if not just un-reference the last reference
 			if (ref.deleted == true) {
 				ret = UserKernel.fileSystem.remove(filename);
@@ -441,10 +506,10 @@ public class UserProcess {
 				fileRefMap.remove(filename);
 				// TODO: remove me
 				if (ret)
-                    System.out.println("Nachos: delete file because last ref removed");
+					System.out.println("Nachos: delete file because last ref removed");
 				else
-                    System.out.println("Nachos: delete failed!");
-            }
+					System.out.println("Nachos: delete failed!");
+			}
 		}
 
 		fileRefLock.release();
@@ -456,7 +521,7 @@ public class UserProcess {
 	 * unlink(delete) the file if no processes have the file open, otherwise just mark deleted flag
 	 * @param filename
 	 * @return false: 1. cannot find file in the map 2. still open by some file, cannot delete, 3. delete successfully
-     *          true:
+	 *          true:
 	 */
 
 	private static boolean unLinkFile(String filename) {
@@ -476,17 +541,17 @@ public class UserProcess {
 			ret = UserKernel.fileSystem.remove(filename);
 			// TODO: think about leaving the filename in the map if remove() failed
 			fileRefMap.remove(filename);
-            // TODO: remove me
+			// TODO: remove me
 			if (ret)
-                System.out.println("Nachos: delete done!");
+				System.out.println("Nachos: delete done!");
 			else
-                System.out.println("Nachos: delete failed!");
+				System.out.println("Nachos: delete failed!");
 		}
-        // TODO: remove me
+		// TODO: remove me
 		if (ref.numOfRef > 0 )
-            System.out.println("Nachos: still be opened");
-        fileRefLock.release();
-        return ret;
+			System.out.println("Nachos: still be opened");
+		fileRefLock.release();
+		return ret;
 	}
 
 	private int creatOrOpenFile(int vAddr, boolean createFlag) {
@@ -530,11 +595,112 @@ public class UserProcess {
 	 */
 	private int handleHalt() {
 
-		Machine.halt();
-
-		Lib.assertNotReached("Machine.halt() did not halt machine!");
+		if (pid == ROOT)
+			Machine.halt();
+		else
+			Lib.assertNotReached("Machine.halt() did not halt machine!");
 		return 0;
 	}
+
+	private void handleExit(int status){
+		Lib.debug(dbgProcess, "handleExit()");
+
+		//close files
+		for (int i=0; i!=16; ++i){
+			if (openFileMap[i]!=null){
+				handleClose(i);
+			}
+		}
+
+		//change exitStatus
+		exitStatus = status;
+
+		//change all child processes' parent to ROOT
+		if (children!=null && !children.isEmpty()){
+			for (int cid: children.keySet()){
+				children.get(cid).parentid = ROOT;
+			}
+		}
+		children = null;
+
+		//release memory
+		unloadSections();
+
+		//kill the current KThred, if it's root, terminate the Kernel
+		if (pid==ROOT){
+			Lib.debug(dbgProcess, "ROOT terminited!");
+			Kernel.kernel.terminate();
+		}
+		else {
+			KThread.currentThread().finish();
+		}
+	}
+
+	private int handleExec(int file, int argc, int argv){
+		if(argv<0 || argc<0 || file<0)
+			return -1;
+		String fName=readVirtualMemoryString(file,255);
+
+		if(fName==null)
+			return -1;
+		String args[]=new String[argc];
+
+		int arg;
+
+		byte temp[]=new byte[4];
+
+		for(int i=0;i<argc;i++){
+			if(readVirtualMemory(argv+i*4,temp)!=4)
+				return -1;
+			arg=Lib.bytesToInt(temp,0);
+
+			if((args[i]=readVirtualMemoryString(arg,255))==null)
+				return -1;
+		}
+
+		UserProcess child=UserProcess.newUserProcess();
+		child.parentid=this.pid;
+
+		if(child.execute(fName,args)){
+			children.put(child.pid,child);
+			return child.pid;
+		}
+
+		return -1;
+	}
+
+	private int handleJoin(int pid, int status){
+		if (status<0 || pid<0)
+			return -1;
+
+		UserProcess child;
+
+		if(children.containsKey(pid))
+			child=children.get(pid);
+		else
+			return -1;
+
+		child.thread.join();
+		children.remove(pid);
+
+		if(child.exitStatus == 0){
+			byte stats[]=new byte[4];
+			stats=Lib.bytesFromInt(child.exitStatus);
+			int byteTransf=writeVirtualMemory(status,stats);
+
+			if(byteTransf==4)
+				return 1;
+			else
+				return 0;
+		}
+		return 0;
+	}
+
+	/**
+	 *
+	 * @param vAddr in memory system, the address is use
+	 * @return
+	 */
 
 	private int handleCreat(int vAddr) {
 		return creatOrOpenFile(vAddr, true);
@@ -703,11 +869,12 @@ public class UserProcess {
 			case syscallHalt:
 				return handleHalt();
 			case syscallExit:
-				break;
+				handleExit(a0);
+				return 0;
 			case syscallExec:
-				break;
+				return handleExec(a0,a1,a2);
 			case syscallJoin:
-				break;
+				return handleJoin(a0,a1);
 			case syscallCreate:
 				return handleCreat(a0);
 			case syscallOpen:
@@ -785,4 +952,21 @@ public class UserProcess {
 	private static HashMap<String, FileReference> fileRefMap = new HashMap<String, FileReference> ();
 	private static Lock fileRefLock = new Lock();
 
+	private static final int ROOT = 0;
+
+	private static int processCount=ROOT;
+	//this process's id
+	private int pid;
+	//parent process's id
+	private int parentid = ROOT;
+	//childProcess
+	private HashMap<Integer,UserProcess> children = null;
+	/*
+	exitStatus:
+	0 exit normally:
+	-1 exit with Exception
+	 */
+	private int exitStatus;
+
+	private UThread thread;
 }

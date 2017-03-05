@@ -2,11 +2,61 @@
 #include "stdio.h"
 #include "stdlib.h"
 
+int testUnlink() {
+  int i, fd; 
+  int fdMap[5];
+  
+  if ( (fd = creat("unlinkTest.txt")) == -1) {
+      printf("Unable to create file unlinkTest.txt\n");
+      return -1;
+  }
+  
+  char writeString[] = "Test file for unlink()\n";
+  write(fd, writeString, sizeof(writeString));
+  /*
+  for (i = 0; i < 5; i++) {
+    printf("-----------------Opening file %d-------------------\n", i);
+    if ( (fdMap[i] = open("unlinkTest.txt")) == -1) {
+      printf("Unable to open file %d\n", i);
+    }
+    if (i >= 1)
+      //printf("unlink() return %d\n", unlink("unlinkTest.txt"));
+      unlink("unlinkTest.txt");
+  }
+  
+  for (i = 0; i < 5; i++) {
+    printf ("-----------------Closing file %d-------------------\n", i);
+    close(fdMap[i]);
+    //unlink("unlinkTest.txt");
+  }
+  */
+  close(fd);
+  return 0;
+}
 
 int testCreate16(){
-  // file lost, but already tested creating 16+ files
-  // also fix bug in printf
-  // BUT SCANF doesn't work
+  // SCANF doesn't work
+ 
+  int i, fd; 
+  int fdMap[16];
+  char fileName[7];
+  for (i = 0; i < 16; i++) {
+    sprintf(fileName, "%d.test", i);
+    if ( (fd = creat(fileName)) == -1) {
+      printf("Unable to create file %d\n", i);
+    }
+    
+    fdMap[i] = fd;
+  }
+  
+  for (i = 0; i < 16; i++) {
+    printf("close() return %d\n", close(fdMap[i]));
+  }
+  
+  return 0;
+}
+
+int testClose() {
   char temp[10];
   //scanf("%9s", temp);
   //printf("%s\n", temp);
@@ -66,24 +116,6 @@ int tesetRead() {
   */
 }
 
-int testUnlink() {
-  int fd1, fd2, fd3;
-  if ( (fd1 = open("unlinkTest.txt")) == -1) {
-    return -1;
-  }
-  if ( (fd2 = open("unlinkTest.txt")) == -1) {
-    return -1;
-  }
-  if ( (fd3 = open("unlinkTest.txt")) == -1) {
-    return -1;
-  }
-
-  unlink("unlinkTest.txt");
-  close(fd1);
-  close(fd2);
-  close(fd3);
-}
-
 int main(int argc, char** argv)
 {
     //test what is argc
@@ -99,8 +131,9 @@ int main(int argc, char** argv)
     return 1;
   }
   */
-  //testUnlink();
-  testCreate16();
+  //testCreatWrite();
+  testUnlink();
+  //testCreate16();
 
   return 0;
 }
