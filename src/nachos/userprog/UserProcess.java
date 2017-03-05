@@ -637,12 +637,20 @@ public class UserProcess {
 	}
 
 	private int handleExec(int file, int argc, int argv){
-		if(argv<0 || argc<0 || file<0)
+		if(argv<0 || argc<1 || file<0)
 			return -1;
 		String fName=readVirtualMemoryString(file,255);
 
 		if(fName==null)
 			return -1;
+
+		//check filename extension = .coff?
+		String suffix = fName.toLowerCase().substring(fName.length()-4);
+
+		if (!".coff".equals(suffix)){
+			return -1;
+		}
+
 		String args[]=new String[argc];
 
 		int arg;
@@ -683,17 +691,14 @@ public class UserProcess {
 		child.thread.join();
 		children.remove(pid);
 
-		if(child.exitStatus == 0){
-			byte stats[]=new byte[4];
-			stats=Lib.bytesFromInt(child.exitStatus);
-			int byteTransf=writeVirtualMemory(status,stats);
+		byte stats[]=new byte[4];
+		stats=Lib.bytesFromInt(child.exitStatus);
+		int byteTransf=writeVirtualMemory(status,stats);
 
-			if(byteTransf==4)
-				return 1;
-			else
-				return 0;
-		}
-		return 0;
+		if(byteTransf==4)
+			return 1;
+		else
+			return 0;
 	}
 
 	/**
