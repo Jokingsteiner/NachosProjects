@@ -44,23 +44,25 @@ public class UserKernel extends ThreadedKernel {
 		emptyList = new LinkedList<Integer>();
 		pStatus = new ArrayList<Boolean>();
 		// FIXME: considering put interrupt disable here
+		boolean intStatus = Machine.interrupt().disable();
 		for(int i=0; i<Machine.processor().getNumPhysPages();i++){
 			emptyList.add(i);
 			pStatus.add(false);
 		}
+		Machine.interrupt().restore(intStatus);
 	}
 
 	// Allocate pages: always pop out from the front of the linked list. In this way, it can avoid the fragmentation.
 	public static int allocPage(){
-		Machine.interrupt().disable();
+		boolean intStatus = Machine.interrupt().disable();
 		if(emptyList.size() < 1){
-			Machine.interrupt().enable();
+			Machine.interrupt().restore(intStatus);
 			return -1;
 		}else{
 			int currentPage = emptyList.pop();
 			Lib.assertTrue(pStatus.get(currentPage) == false);
 			pStatus.set(currentPage, true);
-			Machine.interrupt().enable();
+			Machine.interrupt().restore(intStatus);
 			return currentPage;
 		}
 	}
@@ -68,11 +70,11 @@ public class UserKernel extends ThreadedKernel {
 	// Free the pages. Add it back to the front of the available page linked list.
 	// So if a process frees the page, leaves a hole. The new coming process should be able to utilize it, instead of skip it and find contiguous pages.
 	public static void freePage(int currentPage){
-		Machine.interrupt().disable();
+		boolean intStatus = Machine.interrupt().disable();
 		Lib.assertTrue(pStatus.get(currentPage) == true);
 		pStatus.set(currentPage, false);
 		emptyList.push(currentPage);
-		Machine.interrupt().enable();
+		Machine.interrupt().restore(intStatus);
 	}
 
 	/**

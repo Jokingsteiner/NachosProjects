@@ -73,7 +73,7 @@ public class UserProcess {
 	public boolean execute(String name, String[] args) {
 		if (!load(name, args))
 			return false;
-        thread = new UThread(this);
+		thread = new UThread(this);
 		thread.setName(name).fork();
 
 		return true;
@@ -154,11 +154,6 @@ public class UserProcess {
 
 		byte[] memory = Machine.processor().getMemory();
 
-		// FIXME: not sure this is necessary or not
-		// for now, just assume that virtual addresses equal physical addresses
-		if (vaddr < 0 || vaddr >= memory.length)
-			return 0;
-
 		// To record the number of bytes successfully copied (or zero if no data could be copied).
 		int totalTransf = 0;
 
@@ -215,11 +210,6 @@ public class UserProcess {
 
 		byte[] memory = Machine.processor().getMemory();
 
-		// FIXME: not sure this is necessary or not
-		// for now, just assume that virtual addresses equal physical addresses
-		if (vaddr < 0 || vaddr >= memory.length)
-			return 0;
-
 		int totalTransf = 0;
 
 		while(length>0&&offset<data.length){
@@ -259,7 +249,9 @@ public class UserProcess {
 
 		OpenFile executable = ThreadedKernel.fileSystem.open(name, false);
 		if (executable == null) {
-            Lib.debug(dbgProcess, "\topen failed");
+			//TODO: remove me
+			System.out.println("Nachos: load: open failed");
+			Lib.debug(dbgProcess, "\topen failed");
 			return false;
 		}
 
@@ -268,6 +260,8 @@ public class UserProcess {
 		}
 		catch (EOFException e) {
 			executable.close();
+			//TODO: remove me
+			System.out.println("Nachos: load: coff load failed");
 			Lib.debug(dbgProcess, "\tcoff load failed");
 			return false;
 		}
@@ -278,6 +272,8 @@ public class UserProcess {
 			CoffSection section = coff.getSection(s);
 			if (section.getFirstVPN() != numPages) {
 				coff.close();
+				//TODO: remove me
+				System.out.println("Nachos: load: fragmented executable");
 				Lib.debug(dbgProcess, "\tfragmented executable");
 				return false;
 			}
@@ -294,6 +290,8 @@ public class UserProcess {
 		}
 		if (argsSize > pageSize) {
 			coff.close();
+			//TODO: remove me
+			System.out.println("Nachos: load: arguments too long");
 			Lib.debug(dbgProcess, "\targuments too long");
 			return false;
 		}
@@ -341,6 +339,8 @@ public class UserProcess {
 	protected boolean loadSections() {
 		if (numPages > Machine.processor().getNumPhysPages()) {
 			coff.close();
+			//TODO: remove me
+			System.out.println("Nachos: loadSections: insufficient physical memory");
 			Lib.debug(dbgProcess, "\tinsufficient physical memory");
 			return false;
 		}
@@ -358,6 +358,8 @@ public class UserProcess {
 					}
 				}
 				coff.close();
+				//TODO: remove me
+				System.out.println("Nachos: loadSections: unable to allocate pages");
 				return false;
 			}
 			pageTable[i]=new TranslationEntry(i,physicalP,true,false,false,false);
@@ -497,7 +499,7 @@ public class UserProcess {
 			return false;
 		}
 		ref.numOfRef--;
-        // TODO: remove me
+		// TODO: remove me
 		//System.out.println("Nachos: Still have " + ref.numOfRef + " references" + ", file deleted status is " + ref.deleted);
 		if (ref.numOfRef <= 0) {
 			// delete the file if it has been marked as deleted,if not just un-reference the last reference
@@ -598,8 +600,8 @@ public class UserProcess {
 
 		if (pid == ROOT)
 			Machine.halt();
-		else
-			Lib.assertNotReached("Machine.halt() did not halt machine!");
+//		else
+//			Lib.assertNotReached("Machine.halt() did not halt machine!");
 		return 0;
 	}
 
@@ -638,25 +640,38 @@ public class UserProcess {
 	}
 
 	private int handleExec(int file, int argc, int argv){
-		if(argv<0 || argc<1 || file<0) {
-            System.out.println("Nachos: Exec: Input Arg Error");
-            return -1;
+        // FIXME: remove me
+//        System.out.println("Nachos: Exec: argc is " + argc);
+        if(argv<0 || argc<0 || file<0) {
+            // FIXME: remove me
+            if (argv < 0)
+                System.out.println("Nachos: Exec: Input Arg Error, argv < 0");
+            else if (argc < 0 )
+                System.out.println("Nachos: Exec: Input Arg Error, argc < 0");
+            else
+                System.out.println("Nachos: Exec: Input Arg Error, file < 0");
+
+                return -1;
         }
 
 
-		String fName=readVirtualMemoryString(file,255);
-
-		if(fName==null) {
+        String fName=readVirtualMemoryString(file,255);
+        // FIXME: remove me
+//        System.out.println("Nachos: Exec: file ptr is " + file);
+        if(fName==null) {
+            // FIXME: remove me
             System.out.println("Nachos: Exec: Filename is null");
             return -1;
         }
 
-		//check filename extension = .coff?
-		String suffix = fName.toLowerCase().substring(fName.length()-5);
+        //check filename extension = .coff?
+        String suffix = fName.toLowerCase().substring(fName.length()-5);
 
-		if (!".coff".equals(suffix)){
+        if (!".coff".equals(suffix)){
+            // FIXME: remove me
+            System.out.println("Nachos: Exec: extension error");
             return -1;
-		}
+        }
 
 		String args[]=new String[argc];
 
@@ -666,19 +681,18 @@ public class UserProcess {
 
 		for(int i=0;i<argc;i++){
 			if(readVirtualMemory(argv + i * 4,temp)!= 4) {
-                System.out.println("Nachos: Exec: readVirtualMemory failed");
-                return -1;
-            }
+                // FIXME: remove me
+				System.out.println("Nachos: Exec: readVirtualMemory failed");
+				return -1;
+			}
 			arg = Lib.bytesToInt(temp,0);
 
 			if( (args[i] = readVirtualMemoryString(arg,255)) == null ) {
-                System.out.println("Nachos: Exec: readVirtualMemoryString failed");
-                return -1;
-            }
-
-            if (i < 8)
-                System.out.println("Nachos: args[i] is " + args[i]);
-        }
+                // FIXME: remove me
+				System.out.println("Nachos: Exec: readVirtualMemoryString failed");
+				return -1;
+			}
+		}
 
 		UserProcess child=UserProcess.newUserProcess();
 		child.parentid=this.pid;
@@ -687,8 +701,9 @@ public class UserProcess {
 			children.put(child.pid,child);
 			return child.pid;
 		}
-        System.out.println("Nachos: Exec: Chlid Exec failed");
-        return -1;
+        // FIXME: remove me
+		System.out.println("Nachos: Exec: Chlid Exec failed");
+		return -1;
 	}
 
 	private int handleJoin(int pid, int status){
@@ -702,8 +717,14 @@ public class UserProcess {
 		else
 			return -1;
 
-        child.thread.join();
-        children.remove(pid);
+		//TODO: remove me
+		if (child == null)
+			System.out.println("Nachos: handleJoin: chlid is null");
+		else if (child.thread == null)
+			System.out.println("Nachos: handleJoin: chlid.thread is null");
+
+		child.thread.join();
+		children.remove(pid);
 
 		byte stats[]=new byte[4];
 		stats=Lib.bytesFromInt(child.exitStatus);
@@ -922,6 +943,8 @@ public class UserProcess {
 	 */
 	public void handleException(int cause) {
 		Processor processor = Machine.processor();
+		//TODO: remove me
+//		System.out.println("Nachos: expHandler: cause is " + cause);
 		switch (cause) {
 			case Processor.exceptionSyscall:
 				int result = handleSyscall(processor.readRegister(Processor.regV0),
@@ -934,10 +957,10 @@ public class UserProcess {
 				break;
 
 			default:
-                Lib.debug(dbgProcess, "Unexpected exception: "
+				Lib.debug(dbgProcess, "Unexpected exception: "
 						+ Processor.exceptionNames[cause]);
-                handleExit(-1);
-                Lib.assertNotReached("Unexpected exception");
+				handleExit(-1);
+//				Lib.assertNotReached("Unexpected exception");
 		}
 	}
 
